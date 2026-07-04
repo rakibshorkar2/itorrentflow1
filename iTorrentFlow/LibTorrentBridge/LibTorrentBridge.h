@@ -16,6 +16,10 @@ typedef void (^LTPieceCallback)(const char *infoHash, int pieceIndex);
 /// Callback for log messages
 typedef void (^LTLogCallback)(const char *message);
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // MARK: - Lifecycle
 LTSessionRef lt_session_create(void);
 void lt_session_destroy(LTSessionRef session);
@@ -65,3 +69,7 @@ void lt_session_add_dht_router(LTSessionRef session, const char *host, int port)
 // MARK: - Pause / Resume All
 void lt_session_pause_all(LTSessionRef session);
 void lt_session_resume_all(LTSessionRef session);
+
+#ifdef __cplusplus
+}
+#endif
