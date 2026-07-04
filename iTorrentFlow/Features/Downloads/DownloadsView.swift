@@ -244,7 +244,6 @@ public struct DownloadsView: View {
 
     // MARK: - Helpers
     private func formatSpeed(_ bps: Int64) -> String {
-        if bps < 1024 { return "0 KB/s" }
         return ByteCountFormatter.string(fromByteCount: bps, countStyle: .binary) + "/s"
     }
 

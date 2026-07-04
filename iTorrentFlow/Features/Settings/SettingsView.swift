@@ -141,6 +141,7 @@ public struct SettingsView: View {
         settings.maxDownloadSpeed = 0
         settings.maxUploadSpeed = 50
         settings.maxConnections = 200
+        settings.maxActiveTorrents = 5
         settings.enableDHT = true
         settings.enablePEX = true
         settings.enableLSD = true

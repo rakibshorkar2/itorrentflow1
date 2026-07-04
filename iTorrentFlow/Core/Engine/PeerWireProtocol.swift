@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import CryptoKit
 
 // MARK: - Peer Wire Protocol
 /// Implements the BitTorrent peer wire protocol (BEP 3)

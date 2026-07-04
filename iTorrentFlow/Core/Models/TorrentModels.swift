@@ -58,6 +58,11 @@ public enum TorrentStatus: Equatable {
         }
     }
 
+    public var isError: Bool {
+        if case .error = self { return true }
+        return false
+    }
+
     public static func == (lhs: TorrentStatus, rhs: TorrentStatus) -> Bool {
         switch (lhs, rhs) {
         case (.stopped, .stopped), (.connecting, .connecting),

@@ -93,7 +93,6 @@ public struct SpeedGraphView: View {
             .animation(.linear(duration: 0.3), value: dataPoints.count)
         }
         .onChange(of: downloadSpeed) { _, newVal in addDataPoint(dl: newVal, ul: uploadSpeed) }
-        .onChange(of: uploadSpeed) { _, newVal in addDataPoint(dl: downloadSpeed, ul: newVal) }
         .onAppear {
             // Seed with zeros
             let now = Date()

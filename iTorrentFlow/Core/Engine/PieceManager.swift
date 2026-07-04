@@ -8,7 +8,7 @@ public actor PieceManager {
     private let downloadDirectory: URL
 
     private var pieceStates: [PieceState]
-    private var downloadedBytes: Int64 = 0
+    var downloadedBytes: Int64 = 0
 
     public init(metadata: TorrentMetadata, downloadDirectory: URL) throws {
         self.metadata = metadata

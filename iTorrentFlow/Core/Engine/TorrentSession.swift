@@ -50,7 +50,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
 
     // MARK: - Start / Resume
     public func start() {
-        guard status == .stopped || status == .error("") else { return }
+        guard status == .stopped || status.isError else { return }
         status = .connecting
         startLiveActivity()
 
@@ -185,8 +185,9 @@ public final class TorrentSession: ObservableObject, Identifiable {
                     }
                 }
 
+                let p = await pm.progress
                 await MainActor.run { [weak self] in
-                    self?.progress = Double(pieceIdx + 1) / Double(self?.metadata.pieces.count ?? 1)
+                    self?.progress = p
                     self?.updateLiveActivity()
                 }
             }
@@ -224,7 +225,8 @@ public final class TorrentSession: ObservableObject, Identifiable {
 
     // MARK: - Live Activity (Dynamic Island)
     private func startLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard SettingsManager.shared.showDynamicIsland,
+              ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attributes = TorrentLiveActivityAttributes(
             torrentName: metadata.name,
             torrentID: id.uuidString
@@ -276,10 +278,4 @@ public final class TorrentSession: ObservableObject, Identifiable {
     }
 }
 
-// MARK: - PieceManager downloaded bytes accessor
-private extension PieceManager {
-    var downloadedBytes: Int64 { get async { downloadedBytes } }
-    var progress: Double { get async { progress } }
-    var nextMissingPieceIndex: Int? { get async { nextMissingPieceIndex } }
-    var pieceStatusArray: [PieceStatus] { get async { pieceStatusArray } }
-}
+

@@ -19,10 +19,9 @@ settings:
     SWIFT_OPTIMIZATION_LEVEL: "-Onone"
 
 packages:
-  # Pure-Swift async/await networking utilities
   swift-async-algorithms:
     url: https://github.com/apple/swift-async-algorithms
-    exactVersion: "1.0.0"
+    exactVersion: "1.1.5"
 
 targets:
   iTorrentFlow:

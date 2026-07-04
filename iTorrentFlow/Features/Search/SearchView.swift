@@ -195,7 +195,7 @@ public struct SearchView: View {
                     .padding(.horizontal, Theme.spacing4)
 
                 FlowLayout(spacing: 8) {
-                    ForEach(["Movies 2024", "Ubuntu ISO", "Swift Programming", "4K Documentary"], id: \.self) { suggestion in
+                    ForEach(["Latest Movies", "Ubuntu ISO", "Popular TV Shows", "4K Documentary"], id: \.self) { suggestion in
                         Button {
                             viewModel.query = suggestion
                             viewModel.search()
