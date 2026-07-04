@@ -90,8 +90,8 @@ struct FilePriorityRow: View {
 
     private var priorityColor: Color {
         switch priority {
-        case .skip: return .tertiary
-        case .low: return .secondary
+        case .skip: return Color(.tertiaryLabel)
+        case .low: return Color(.secondaryLabel)
         case .normal: return Theme.accent
         case .high: return Theme.accentSecondary
         }

@@ -21,7 +21,6 @@ public struct DownloadRowView: View {
 
                 GradientProgressBar(
                     progress: session.progress,
-                    height: 4,
                     color: session.status.isActive ? Theme.downloadColor : .secondary
                 )
 
