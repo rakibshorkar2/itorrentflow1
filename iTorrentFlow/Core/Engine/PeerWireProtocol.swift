@@ -375,7 +375,7 @@ public actor PeerConnection {
         // Wait for all metadata pieces to arrive with a timeout
         return try await withThrowingTimeout(seconds: 30) {
             try await withCheckedThrowingContinuation { continuation in
-                metadataContinuation = continuation
+                self.metadataContinuation = continuation
             }
         }
     }
