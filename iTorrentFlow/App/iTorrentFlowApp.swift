@@ -7,11 +7,19 @@ struct iTorrentFlowApp: App {
     @StateObject private var engine = TorrentEngine.shared
     @State private var selectedTab: AppTab = .downloads
 
+    private var preferredScheme: ColorScheme? {
+        switch SettingsManager.shared.colorScheme {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             MainTabView(selectedTab: $selectedTab)
                 .environmentObject(engine)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(preferredScheme)
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }

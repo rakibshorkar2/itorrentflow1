@@ -61,13 +61,23 @@ public struct FileBrowserView: View {
 
     // MARK: - Storage Info
     private var storageInfo: some View {
-        VStack(alignment: .trailing, spacing: 1) {
-            Text(viewModel.formattedUsedStorage)
-                .font(Theme.captionFont(size: 12))
-                .foregroundStyle(Theme.textPrimary)
-            Text("used")
-                .font(Theme.captionFont(size: 10))
-                .foregroundStyle(Theme.textTertiary)
+        HStack(spacing: Theme.spacing8) {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(viewModel.formattedUsedStorage)
+                    .font(Theme.captionFont(size: 12))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("used")
+                    .font(Theme.captionFont(size: 10))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(viewModel.formattedFreeStorage)
+                    .font(Theme.captionFont(size: 12))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("free")
+                    .font(Theme.captionFont(size: 10))
+                    .foregroundStyle(Theme.textTertiary)
+            }
         }
     }
 }
@@ -294,6 +304,17 @@ public final class FileBrowserViewModel: ObservableObject {
 
     public var formattedUsedStorage: String {
         ByteCountFormatter.string(fromByteCount: usedStorage, countStyle: .file)
+    }
+
+    public var formattedFreeStorage: String {
+        let free: Int64
+        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+           let freeBytes = attrs[.systemFreeSize] as? NSNumber {
+            free = freeBytes.int64Value
+        } else {
+            free = 0
+        }
+        return ByteCountFormatter.string(fromByteCount: free, countStyle: .file)
     }
 
     public func openInFiles(file: BrowsableFile, folderName: String) {

@@ -42,6 +42,9 @@ public final class SettingsManager: ObservableObject {
     @Published public var defaultCategory: TorrentCategory = .general {
         didSet { defaults.set(defaultCategory.rawValue, forKey: "defaultCategory") }
     }
+    @Published public var colorScheme: String = "dark" {
+        didSet { defaults.set(colorScheme, forKey: "colorScheme") }
+    }
     @Published public var sequentialDownload: Bool = false {
         didSet { defaults.set(sequentialDownload, forKey: "sequentialDownload") }
     }
@@ -75,5 +78,6 @@ public final class SettingsManager: ObservableObject {
         if let cat = defaults.string(forKey: "defaultCategory") {
             defaultCategory = TorrentCategory(rawValue: cat) ?? .general
         }
+        colorScheme = defaults.string(forKey: "colorScheme") ?? "dark"
     }
 }

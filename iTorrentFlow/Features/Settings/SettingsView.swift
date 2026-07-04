@@ -85,6 +85,22 @@ public struct SettingsView: View {
                     }
                     .listRowBackground(Theme.surfaceElevated)
 
+                    // MARK: Appearance
+                    Section {
+                        SettingsRow(label: "Appearance", icon: "sun.max.fill", color: .orange) {
+                            Picker("", selection: $settings.colorScheme) {
+                                Text("System").tag("system")
+                                Text("Light").tag("light")
+                                Text("Dark").tag("dark")
+                            }
+                            .pickerStyle(.segmented)
+                            .tint(Theme.accent)
+                        }
+                    } header: {
+                        SectionHeader(label: "Appearance", icon: "sun.max.fill")
+                    }
+                    .listRowBackground(Theme.surfaceElevated)
+
                     // MARK: About
                     Section {
                         Button {
@@ -97,6 +113,12 @@ public struct SettingsView: View {
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
+
+                        SettingsRow(label: "Developer", icon: "person.fill", color: Theme.accent) {
+                            Text("RAKIB")
+                                .foregroundStyle(Theme.textSecondary)
+                                .font(Theme.monoFont(size: 13))
+                        }
 
                         Link(destination: URL(string: "https://github.com")!) {
                             SettingsRow(label: "GitHub", icon: "chevron.left.forwardslash.chevron.right", color: Theme.textSecondary.opacity(1)) {
@@ -149,6 +171,7 @@ public struct SettingsView: View {
         settings.startOnAdd = true
         settings.sequentialDownload = false
         settings.showDynamicIsland = true
+        settings.colorScheme = "dark"
     }
 }
 
@@ -336,7 +359,6 @@ struct AboutView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 
