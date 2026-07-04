@@ -24,8 +24,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
     private var downloadTask: Task<Void, Never>?
     private var speedTimer: Timer?
     private var speedBytesLast: Int64 = 0
-    @available(iOS 16.1, *)
-    private var liveActivity: Activity<TorrentLiveActivityAttributes>?
+    private var liveActivity: Any?
     private var localPeerID: Data
 
     // Settings
@@ -243,7 +242,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
                     contentState: state,
                     pushType: nil
                 )
-                liveActivity = activity
+                liveActivity = activity as Any
             } catch {
                 print("Live Activity error: \(error)")
             }
@@ -252,7 +251,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
 
     private func updateLiveActivity() {
         if #available(iOS 16.1, *) {
-            guard let activity = liveActivity else { return }
+            guard let activity = liveActivity as? Activity<TorrentLiveActivityAttributes> else { return }
             let state = TorrentLiveActivityAttributes.TorrentDownloadState(
                 progress: progress,
                 downloadSpeed: downloadSpeed,
@@ -272,7 +271,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
     private func endLiveActivity() {
         if #available(iOS 16.1, *) {
             Task {
-                await liveActivity?.end(
+                await (liveActivity as? Activity<TorrentLiveActivityAttributes>)?.end(
                     using: TorrentLiveActivityAttributes.TorrentDownloadState(
                         progress: progress,
                         statusLabel: status == .completed ? "Complete" : "Stopped"
