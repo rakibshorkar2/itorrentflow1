@@ -4,7 +4,8 @@
 
 set -e
 
-BUILD_DIR="$(dirname "$0")/../LibTorrentBuild"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/LibTorrentBuild"
 mkdir -p "$BUILD_DIR"
 
 # Minimum iOS version
