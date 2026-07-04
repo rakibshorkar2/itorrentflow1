@@ -71,24 +71,21 @@ public final class LibTorrentSession: ObservableObject, Identifiable {
 
     private func setupCallbacks() {
         let ref = self.ref
-        let infoHash = self.infoHashHex
 
         lt_session_set_callbacks(ref,
-            { ih, prog, dlRate, ulRate, peers, seeds, state, stateStr in
+            { [weak self] ih, prog, dlRate, ulRate, peers, seeds, state, stateStr in
                 DispatchQueue.main.async {
-                    guard let session = TorrentEngine.shared.ltSessions.first(where: { $0.infoHashHex == String(cString: ih!) }) else { return }
-                    session.progress = prog
-                    session.downloadSpeed = dlRate
-                    session.uploadSpeed = ulRate
-                    session.connectedPeers = Int(peers)
-                    session.totalPeers = Int(seeds)
-                    session.status = prog >= 1.0 ? .completed : .downloading
+                    self?.progress = prog
+                    self?.downloadSpeed = dlRate
+                    self?.uploadSpeed = ulRate
+                    self?.connectedPeers = Int(peers)
+                    self?.totalPeers = Int(seeds)
+                    self?.status = prog >= 1.0 ? .completed : .downloading
                 }
             },
-            { ih, pieceIdx in
-                // Piece completed notification
+            { [weak self] ih, pieceIdx in
             },
-            { msg in
+            { [weak self] msg in
                 if let m = msg {
                     print("[LibTorrent] \(String(cString: m))")
                 }
@@ -114,7 +111,7 @@ public final class LibTorrentSession: ObservableObject, Identifiable {
 
     // MARK: - File Priority
     public func setFilePriority(fileIndex: Int, priority: FilePriority) {
-        lt_session_set_file_priority(ref, infoHashHex, Int32(fileIndex), priority.rawValue)
+        lt_session_set_file_priority(ref, infoHashHex, Int32(fileIndex), Int32(priority.rawValue))
     }
 
     // MARK: - Trackers
