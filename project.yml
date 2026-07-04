@@ -19,10 +19,8 @@ settings:
     SWIFT_OPTIMIZATION_LEVEL: "-Onone"
     CLANG_CXX_LANGUAGE_STANDARD: "c++17"
     CLANG_CXX_LIBRARY: "libc++"
-    OTHER_LDFLAGS: "-ltorrent-rasterbar -lssl -lcrypto"
     HEADER_SEARCH_PATHS:
       - "$(SRCROOT)/LibTorrentBuild/ios/include"
-      - "$(SRCROOT)/LibTorrentBuild/ios/include/libtorrent"
     LIBRARY_SEARCH_PATHS:
       - "$(SRCROOT)/LibTorrentBuild/ios/lib"
 
