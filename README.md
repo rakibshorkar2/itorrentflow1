@@ -4,7 +4,7 @@
 
 ![iOS 16+](https://img.shields.io/badge/iOS-16%2B-blue?style=flat-square&logo=apple)
 ![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange?style=flat-square&logo=swift)
-![Build IPA](https://github.com/OWNER/iTorrentFlow/actions/workflows/build-ipa.yml/badge.svg)
+![Build IPA](https://github.com/rakibshorkar2/itorrentflow1/actions/workflows/build-ipa.yml/badge.svg)
 
 ---
 
