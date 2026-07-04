@@ -44,27 +44,26 @@ jobs:
             -scheme ${{ env.SCHEME }} \
             -derivedDataPath ${{ env.DERIVED_DATA }}
 
+      - name: Install xcpretty
+        run: gem install xcpretty --quiet
+
       - name: Build app (unsigned)
         run: |
+          set -euo pipefail
           xcodebuild \
             -scheme ${{ env.SCHEME }} \
             -configuration ${{ env.CONFIGURATION }} \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -derivedDataPath ${{ env.DERIVED_DATA }} \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             ONLY_ACTIVE_ARCH=NO \
-            build | xcpretty --color || xcodebuild \
-            -scheme ${{ env.SCHEME }} \
-            -configuration ${{ env.CONFIGURATION }} \
-            -sdk iphoneos \
-            -derivedDataPath ${{ env.DERIVED_DATA }} \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            ONLY_ACTIVE_ARCH=NO \
-            build
+            build 2>&1 | xcpretty --color --simple
+          # Capture real exit code (xcpretty swallows it)
+          BUILD_EXIT=${PIPESTATUS[0]}
+          exit $BUILD_EXIT
 
       - name: Package unsigned IPA
         run: |
