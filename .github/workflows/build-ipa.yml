@@ -69,15 +69,41 @@ jobs:
       - name: Package unsigned IPA
         run: |
           set -e
-          APP_PATH=$(find ${{ env.DERIVED_DATA }} -name "*.app" -not -path "*/PackageFrameworks/*" | grep -v ".appex" | head -1)
-          echo "Found app at: $APP_PATH"
+          echo "=== Searching for .app bundles in DerivedData ==="
+          find ${{ env.DERIVED_DATA }} -name "*.app" 2>/dev/null || true
+          echo "=== Products directory ==="
+          find ${{ env.DERIVED_DATA }}/Build/Products -maxdepth 3 2>/dev/null || true
+          
+          # Find the main app (exclude extensions, test runners)
+          APP_PATH=$(find ${{ env.DERIVED_DATA }}/Build/Products \
+            -name "iTorrentFlow.app" \
+            -not -name "*.appex" \
+            -maxdepth 4 \
+            2>/dev/null | head -1)
+          
+          # Fallback: broader search
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find ${{ env.DERIVED_DATA }} \
+              -name "iTorrentFlow.app" \
+              -not -path "*/PackageFrameworks/*" \
+              -not -name "*.appex" \
+              2>/dev/null | head -1)
+          fi
+          
+          echo "App path: $APP_PATH"
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: iTorrentFlow.app not found!"
+            find ${{ env.DERIVED_DATA }} -name "*.app" 2>/dev/null || true
+            exit 1
+          fi
           
           mkdir -p ${{ github.workspace }}/build/Payload
-          cp -r "$APP_PATH" ${{ github.workspace }}/build/Payload/
+          cp -r "$APP_PATH" ${{ github.workspace }}/build/Payload/iTorrentFlow.app
           
           cd ${{ github.workspace }}/build
           zip -r iTorrentFlow.ipa Payload/
-          echo "IPA created at: ${{ env.IPA_PATH }}"
+          echo "IPA created successfully"
           ls -lh iTorrentFlow.ipa
 
       - name: Upload IPA artifact
