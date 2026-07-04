@@ -81,8 +81,8 @@ public actor PeerConnection {
         let pstr = "BitTorrent protocol"
         handshake.append(UInt8(pstr.count))
         handshake.append(contentsOf: pstr.utf8)
-        // Reserved bytes — set bit 20 (0x10) for extension protocol (BEP 10)
-        handshake.append(contentsOf: [0, 0, 0, 0, 0, 0x10, 0, 0])
+        // Reserved bytes — set bit 20 (byte 2, bit 4 = 0x10) for extension protocol (BEP 10)
+        handshake.append(contentsOf: [0, 0, 0x10, 0, 0, 0, 0, 0])
         handshake.append(infoHash)
         handshake.append(localPeerID)
         try await send(data: handshake)
@@ -99,11 +99,9 @@ public actor PeerConnection {
         guard receivedInfoHash == infoHash else {
             throw PeerError.infoHashMismatch
         }
-        // Check if peer supports extensions (bit 20 in reserved bytes at offset 25)
+        // Check if peer supports extensions (bit 20 = byte 2, bit 4 = 0x10)
         let reserved = data[20..<28]
-        if reserved.count > 5 && (reserved[5] & 0x10) != 0 {
-            peerSupportsMetadata = true
-        }
+        peerSupportsMetadata = reserved[2] & 0x10 != 0
     }
 
     // MARK: - Message Loop
@@ -361,22 +359,37 @@ public actor PeerConnection {
 
         // Wait for the peer's extended handshake if not already received
         if !receivedExtHandshake {
-            // Our extended handshake was already sent in connect().
-            // Re-send in case the first was lost.
             sendOurExtendedHandshake()
             try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
                 extHandshakeCont = cont
             }
         }
 
-        guard metadataSize > 0, utMetadataID > 0 else { throw PeerError.noMetadataPeer }
+        guard metadataSize > 0 else { throw PeerError.noMetadataPeer }
 
-        // Start requesting metadata pieces
+        // Reset pieces state and start requesting
+        metadataPieces = [:]
+        metadataRequestedPieces = []
         requestMetadataPiece()
 
-        // Wait for all metadata pieces to arrive
-        return try await withCheckedThrowingContinuation { continuation in
-            metadataContinuation = continuation
+        // Wait for all metadata pieces to arrive with a timeout
+        return try await withThrowingTimeout(seconds: 30) {
+            try await withCheckedThrowingContinuation { continuation in
+                metadataContinuation = continuation
+            }
+        }
+    }
+
+    private func withThrowingTimeout<T>(seconds: Int, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+                throw PeerError.metadataRejected
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
 
