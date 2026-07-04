@@ -59,7 +59,7 @@ public struct AddTorrentView: View {
             ) { result in
                 viewModel.handleFileImport(result: result)
             }
-            .onChange(of: viewModel.didStart) { _, started in
+            .onChange(of: viewModel.didStart) { started in
                 if started { dismiss() }
             }
         }
@@ -105,7 +105,7 @@ public struct AddTorrentView: View {
                     .scrollContentBackground(.hidden)
                     .focused($isMagnetFocused)
                     .frame(minHeight: 80, maxHeight: 120)
-                    .onChange(of: viewModel.magnetText) { _, newText in
+                    .onChange(of: viewModel.magnetText) { newText in
                         viewModel.validateMagnet(newText)
                     }
             }

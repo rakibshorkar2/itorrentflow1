@@ -124,4 +124,11 @@ public extension View {
             .padding(padding)
             .glassMorphism()
     }
+
+    func bounceSymbolEffect(value: some Equatable) -> AnyView {
+        if #available(iOS 17.0, *) {
+            return AnyView(self.symbolEffect(.bounce, value: value))
+        }
+        return AnyView(self)
+    }
 }

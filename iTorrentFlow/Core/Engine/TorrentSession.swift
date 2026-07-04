@@ -225,54 +225,63 @@ public final class TorrentSession: ObservableObject, Identifiable {
 
     // MARK: - Live Activity (Dynamic Island)
     private func startLiveActivity() {
-        guard SettingsManager.shared.showDynamicIsland,
-              ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        let attributes = TorrentLiveActivityAttributes(
-            torrentName: metadata.name,
-            torrentID: id.uuidString
-        )
-        let state = TorrentLiveActivityAttributes.TorrentDownloadState(
-            progress: 0,
-            statusLabel: "Starting..."
-        )
-        do {
-            let activity = try Activity<TorrentLiveActivityAttributes>.request(
-                attributes: attributes,
-                contentState: state,
-                pushType: nil
+        guard SettingsManager.shared.showDynamicIsland else { return }
+        if #available(iOS 16.1, *) {
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+            let attributes = TorrentLiveActivityAttributes(
+                torrentName: metadata.name,
+                torrentID: id.uuidString
             )
-            liveActivity = activity
-        } catch {
-            print("Live Activity error: \(error)")
+            let state = TorrentLiveActivityAttributes.TorrentDownloadState(
+                progress: 0,
+                statusLabel: "Starting..."
+            )
+            do {
+                let pushType: ActivityPushType? = nil
+                let activity = try Activity<TorrentLiveActivityAttributes>.request(
+                    attributes: attributes,
+                    contentState: state,
+                    pushType: pushType
+                )
+                liveActivity = activity
+            } catch {
+                print("Live Activity error: \(error)")
+            }
         }
     }
 
     private func updateLiveActivity() {
         guard let activity = liveActivity else { return }
-        let state = TorrentLiveActivityAttributes.TorrentDownloadState(
-            progress: progress,
-            downloadSpeed: downloadSpeed,
-            uploadSpeed: uploadSpeed,
-            downloadedBytes: Int64(progress * Double(metadata.totalSize)),
-            totalBytes: metadata.totalSize,
-            statusLabel: status.label,
-            connectedPeers: connectedPeers,
-            isPaused: status == .paused
-        )
-        Task {
-            await activity.update(using: state)
+        if #available(iOS 16.1, *) {
+            let state = TorrentLiveActivityAttributes.TorrentDownloadState(
+                progress: progress,
+                downloadSpeed: downloadSpeed,
+                uploadSpeed: uploadSpeed,
+                downloadedBytes: Int64(progress * Double(metadata.totalSize)),
+                totalBytes: metadata.totalSize,
+                statusLabel: status.label,
+                connectedPeers: connectedPeers,
+                isPaused: status == .paused
+            )
+            Task {
+                await activity.update(using: state)
+            }
         }
     }
 
     private func endLiveActivity() {
-        Task {
-            await liveActivity?.end(
-                using: TorrentLiveActivityAttributes.TorrentDownloadState(
-                    progress: progress,
-                    statusLabel: status == .completed ? "Complete" : "Stopped"
-                ),
-                dismissalPolicy: .after(.now + 5)
-            )
+        if #available(iOS 16.1, *) {
+            Task {
+                await liveActivity?.end(
+                    using: TorrentLiveActivityAttributes.TorrentDownloadState(
+                        progress: progress,
+                        statusLabel: status == .completed ? "Complete" : "Stopped"
+                    ),
+                    dismissalPolicy: .after(Date.now + 5)
+                )
+                liveActivity = nil
+            }
+        } else {
             liveActivity = nil
         }
     }

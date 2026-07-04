@@ -89,15 +89,16 @@ public struct SearchResultRowView: View {
     private var downloadButton: some View {
         Button {
             guard let magnet = result.magnetLink else { return }
-            do {
-                let session = try TorrentEngine.shared.addTorrent(magnetURL: magnet)
-                if SettingsManager.shared.startOnAdd { session.start() }
-                withAnimation(Theme.bounce) { isAdded = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Task { @MainActor in
+                do {
+                    let session = try TorrentEngine.shared.addTorrent(magnetURL: magnet)
+                    if SettingsManager.shared.startOnAdd { session.start() }
+                    withAnimation(Theme.bounce) { isAdded = true }
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
                     isAdded = false
+                } catch {
+                    print("Failed to add: \(error)")
                 }
-            } catch {
-                print("Failed to add: \(error)")
             }
         } label: {
             ZStack {
@@ -107,7 +108,7 @@ public struct SearchResultRowView: View {
                 Image(systemName: isAdded ? "checkmark.circle.fill" : "arrow.down.circle.fill")
                     .font(.system(size: 20))
                     .foregroundStyle(isAdded ? Theme.accentTertiary : Theme.accent)
-                    .symbolEffect(.bounce, value: isAdded)
+                    .bounceSymbolEffect(value: isAdded)
             }
         }
         .buttonStyle(PlainButtonStyle())
@@ -183,19 +184,22 @@ public struct SearchResultDetailView: View {
                     // Download button
                     Button {
                         guard let magnet = result.magnetLink else { return }
-                        do {
-                            let session = try TorrentEngine.shared.addTorrent(magnetURL: magnet)
-                            if SettingsManager.shared.startOnAdd { session.start() }
-                            didAdd = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { dismiss() }
-                        } catch {}
+                        Task { @MainActor in
+                            do {
+                                let session = try TorrentEngine.shared.addTorrent(magnetURL: magnet)
+                                if SettingsManager.shared.startOnAdd { session.start() }
+                                didAdd = true
+                                try? await Task.sleep(nanoseconds: 500_000_000)
+                                dismiss()
+                            } catch {}
+                        }
                     } label: {
                         Label(didAdd ? "Added!" : "Download", systemImage: didAdd ? "checkmark.circle.fill" : "arrow.down.circle.fill")
                             .font(Theme.headlineFont())
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(Theme.spacing16)
-                            .background(didAdd ? Theme.accentTertiary : Theme.accentGradient)
+                            .background(didAdd ? AnyShapeStyle(Theme.accentTertiary) : AnyShapeStyle(Theme.accentGradient))
                             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge))
                             .shadow(color: Theme.accent.opacity(0.3), radius: 10, x: 0, y: 4)
                     }
@@ -217,3 +221,5 @@ public struct SearchResultDetailView: View {
         .presentationDetents([.medium, .large])
     }
 }
+
+

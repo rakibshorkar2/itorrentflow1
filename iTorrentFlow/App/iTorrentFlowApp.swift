@@ -153,7 +153,7 @@ struct CustomTabBar: View {
                         Image(systemName: isSelected ? item.activeIcon : item.icon)
                             .font(.system(size: 20))
                             .foregroundStyle(isSelected ? Theme.accent : Theme.textTertiary)
-                            .symbolEffect(.bounce, value: isSelected)
+                            .bounceSymbolEffect(value: isSelected)
 
                         if item.tab == .downloads && engine.activeTorrents > 0 {
                             Text("\(engine.activeTorrents)")

@@ -3,6 +3,7 @@ import Foundation
 
 // MARK: - Live Activity Attributes
 /// Defines the static and dynamic content of the Dynamic Island + Lock Screen widget
+@available(iOS 16.1, *)
 public struct TorrentLiveActivityAttributes: ActivityAttributes {
     public typealias ContentState = TorrentDownloadState
 

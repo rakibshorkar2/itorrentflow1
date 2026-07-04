@@ -9,6 +9,7 @@ public final class TorrentStore {
     public init() {}
 
     // MARK: - Save
+    @MainActor
     public func save(session: TorrentSession) {
         var items = loadAllItems()
         let item = makeItem(from: session)
@@ -51,6 +52,7 @@ public final class TorrentStore {
     }
 
     // MARK: - Helpers
+    @MainActor
     private func makeItem(from session: TorrentSession) -> TorrentItem {
         TorrentItem(
             id: session.id,
