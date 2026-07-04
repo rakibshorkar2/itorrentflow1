@@ -19,10 +19,6 @@ settings:
     SWIFT_OPTIMIZATION_LEVEL: "-Onone"
     CLANG_CXX_LANGUAGE_STANDARD: "c++17"
     CLANG_CXX_LIBRARY: "libc++"
-    HEADER_SEARCH_PATHS:
-      - "$(SRCROOT)/LibTorrentBuild/ios/include"
-    LIBRARY_SEARCH_PATHS:
-      - "$(SRCROOT)/LibTorrentBuild/ios/lib"
 
 packages:
   swift-async-algorithms:
@@ -62,6 +58,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
+    configFiles:
+      Release: LibTorrent.xcconfig
+      Debug: LibTorrent.xcconfig
     entitlements:
       path: iTorrentFlow/Resources/iTorrentFlow.entitlements
     dependencies:

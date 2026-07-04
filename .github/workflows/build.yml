@@ -14,11 +14,17 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          brew install cmake boost openssl@3
+          brew install cmake boost
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
       - name: Build LibTorrent for iOS
         run: |
           bash Scripts/build-libtorrent-ios.sh
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
 
       - name: Build iOS App (unsigned)
         run: |
