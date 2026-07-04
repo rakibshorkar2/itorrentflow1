@@ -231,11 +231,13 @@ public actor PeerConnection {
             metadataRequestedPieces.remove(Int(piece))
 
             // Check if we have all pieces
-            let totalMetadataBytes = metadataPieces.count * 16384
+            let totalMetadataBytes = Int(metadataPieces.count) * 16384
             if totalMetadataBytes >= metadataSize {
                 // Reassemble metadata
                 var full = Data()
-                for i in 0..<Int((metadataSize + 16*1024 - 1) / (16*1024)) {
+                let blockSize = 16384
+                let totalPieces = (metadataSize + blockSize - 1) / blockSize
+                for i in 0..<totalPieces {
                     if let piece = metadataPieces[i] {
                         full.append(piece)
                     }
@@ -258,7 +260,7 @@ public actor PeerConnection {
     }
 
     private func requestMetadataPiece() {
-        let blockSize = 16 * 1024
+        let blockSize = 16384
         let totalPieces = (metadataSize + blockSize - 1) / blockSize
 
         // Find the next unrequested piece
