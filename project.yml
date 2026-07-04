@@ -1,0 +1,84 @@
+name: iTorrentFlow
+options:
+  bundleIdPrefix: com.itorrentflow
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.4"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  indentWidth: 4
+  tabWidth: 4
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_BITCODE: NO
+    ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+
+packages:
+  # Pure-Swift async/await networking utilities
+  swift-async-algorithms:
+    url: https://github.com/apple/swift-async-algorithms
+    from: "1.0.0"
+
+targets:
+  iTorrentFlow:
+    type: application
+    platform: iOS
+    sources:
+      - path: iTorrentFlow
+        excludes:
+          - "**/.DS_Store"
+    resources:
+      - path: iTorrentFlow/Resources
+        type: folder
+        optional: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.itorrentflow.app
+        INFOPLIST_FILE: iTorrentFlow/Resources/Info.plist
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_IDENTITY: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        SUPPORTS_MACCATALYST: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+    entitlements:
+      path: iTorrentFlow/Resources/iTorrentFlow.entitlements
+    dependencies:
+      - package: swift-async-algorithms
+      - target: iTorrentFlowLiveActivity
+        embed: true
+    preBuildScripts:
+      - name: SwiftLint
+        script: |
+          if which swiftlint >/dev/null; then
+            swiftlint lint --config .swiftlint.yml || true
+          fi
+        basedOnDependencyAnalysis: false
+
+  iTorrentFlowLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: iTorrentFlowLiveActivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.itorrentflow.app.LiveActivity
+        INFOPLIST_FILE: iTorrentFlowLiveActivity/Info.plist
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_IDENTITY: ""
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+        SUPPORTS_MACCATALYST: NO
+    entitlements:
+      path: iTorrentFlowLiveActivity/iTorrentFlowLiveActivity.entitlements

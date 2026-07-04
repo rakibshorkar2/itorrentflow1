@@ -1,0 +1,106 @@
+name: Build Unsigned IPA
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  SCHEME: iTorrentFlow
+  CONFIGURATION: Release
+  DERIVED_DATA: ${{ github.workspace }}/DerivedData
+  ARCHIVE_PATH: ${{ github.workspace }}/build/iTorrentFlow.xcarchive
+  IPA_PATH: ${{ github.workspace }}/build/iTorrentFlow.ipa
+
+jobs:
+  build:
+    name: Build Unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Resolve Swift Package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme ${{ env.SCHEME }} \
+            -derivedDataPath ${{ env.DERIVED_DATA }}
+
+      - name: Build app (unsigned)
+        run: |
+          xcodebuild \
+            -scheme ${{ env.SCHEME }} \
+            -configuration ${{ env.CONFIGURATION }} \
+            -sdk iphoneos \
+            -derivedDataPath ${{ env.DERIVED_DATA }} \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build | xcpretty --color || xcodebuild \
+            -scheme ${{ env.SCHEME }} \
+            -configuration ${{ env.CONFIGURATION }} \
+            -sdk iphoneos \
+            -derivedDataPath ${{ env.DERIVED_DATA }} \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP_PATH=$(find ${{ env.DERIVED_DATA }} -name "*.app" -not -path "*/PackageFrameworks/*" | grep -v ".appex" | head -1)
+          echo "Found app at: $APP_PATH"
+          
+          mkdir -p ${{ github.workspace }}/build/Payload
+          cp -r "$APP_PATH" ${{ github.workspace }}/build/Payload/
+          
+          cd ${{ github.workspace }}/build
+          zip -r iTorrentFlow.ipa Payload/
+          echo "IPA created at: ${{ env.IPA_PATH }}"
+          ls -lh iTorrentFlow.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iTorrentFlow-unsigned-${{ github.sha }}
+          path: ${{ env.IPA_PATH }}
+          retention-days: 30
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ github.sha }}
+          path: ${{ env.DERIVED_DATA }}/Logs/
+          retention-days: 7
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging || true
