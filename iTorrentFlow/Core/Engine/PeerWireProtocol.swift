@@ -19,6 +19,7 @@ public actor PeerConnection {
 
     // MARK: - Metadata Extension (BEP 9)
     private var peerSupportsMetadata = false
+    private var receivedExtHandshake = false
     private var utMetadataID: UInt8 = 0
     private var metadataSize: Int = 0
     private var metadataPieces: [Int: Data] = [:]
@@ -68,6 +69,10 @@ public actor PeerConnection {
         try await receiveHandshake()
         handshakeDone = true
         startReceiveLoop()
+        // Send extended handshake immediately for metadata exchange (BEP 10)
+        if peerSupportsMetadata {
+            sendOurExtendedHandshake()
+        }
     }
 
     // MARK: - Handshake
@@ -161,9 +166,11 @@ public actor PeerConnection {
                 if case .integer(let size) = ext["metadata_size"] {
                     metadataSize = Int(size)
                 }
+                receivedExtHandshake = true
                 extHandshakeCont?.resume()
                 extHandshakeCont = nil
             } else {
+                receivedExtHandshake = true
                 extHandshakeCont?.resume(throwing: PeerError.noMetadataPeer)
                 extHandshakeCont = nil
             }
@@ -333,7 +340,7 @@ public actor PeerConnection {
     }
 
     // MARK: - Extension Handshake (BEP 10)
-    public func sendExtendedHandshake() {
+    private func sendOurExtendedHandshake() {
         let dict: [String: Any] = [
             "m": ["ut_metadata": 2],
             "metadata_size": 0,
@@ -352,15 +359,17 @@ public actor PeerConnection {
     public func fetchMetadata() async throws -> Data {
         guard peerSupportsMetadata else { throw PeerError.noMetadataPeer }
 
-        // Send the extended handshake
-        sendExtendedHandshake()
-
-        // Wait for the peer's extended handshake which includes metadata_size
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            extHandshakeCont = cont
+        // Wait for the peer's extended handshake if not already received
+        if !receivedExtHandshake {
+            // Our extended handshake was already sent in connect().
+            // Re-send in case the first was lost.
+            sendOurExtendedHandshake()
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                extHandshakeCont = cont
+            }
         }
 
-        guard metadataSize > 0 else { throw PeerError.noMetadataPeer }
+        guard metadataSize > 0, utMetadataID > 0 else { throw PeerError.noMetadataPeer }
 
         // Start requesting metadata pieces
         requestMetadataPiece()

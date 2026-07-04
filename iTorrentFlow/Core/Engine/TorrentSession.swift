@@ -188,8 +188,13 @@ public final class TorrentSession: ObservableObject, Identifiable {
             let conn = PeerConnection(host: ip, port: port, infoHash: metadata.infoHash, localPeerID: localPeerID)
             do {
                 try await conn.connect()
-                let rawMetadata = try await conn.fetchMetadata()
-                let parsedMeta = try TorrentMetadata.parse(from: rawMetadata)
+                let rawInfoDict = try await conn.fetchMetadata()
+                // BEP 9 returns just the bencoded "info" dict — wrap it in a torrent structure
+                var torrentData = Data()
+                torrentData.append(contentsOf: "d4:info".utf8)
+                torrentData.append(rawInfoDict)
+                torrentData.append(UInt8(ascii: "e"))
+                let parsedMeta = try TorrentMetadata.parse(from: torrentData)
                 await MainActor.run {
                     self.metadata = parsedMeta
                 }
