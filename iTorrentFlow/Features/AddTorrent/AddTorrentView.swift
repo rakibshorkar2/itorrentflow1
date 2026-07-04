@@ -341,7 +341,9 @@ public final class AddTorrentViewModel: ObservableObject {
     var hasPendingFile: Bool { pendingTorrentData != nil }
     var pendingMetadata: TorrentMetadata? {
         didSet {
-            filePriorities = Dictionary(uniqueKeysWithValues: pendingMetadata?.files.map { ($0.id, $0.priority) } ?? [:])
+            if let meta = pendingMetadata {
+                filePriorities = Dictionary(uniqueKeysWithValues: meta.files.map { ($0.id, $0.priority) })
+            }
         }
     }
     @Published var filePriorities: [UUID: FilePriority] = [:]

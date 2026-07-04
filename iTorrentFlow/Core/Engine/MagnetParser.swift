@@ -143,8 +143,6 @@ public struct MagnetLink {
         }
         return data.count == 20 ? data : nil
     }
-}
-
     public var shortHash: String {
         String(infoHash.prefix(16)) + "..."
     }

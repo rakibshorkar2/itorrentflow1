@@ -9,8 +9,8 @@ public struct TorrentMetadata {
     public let totalSize: Int64
     public let pieceLength: Int
     public let pieces: [Data]          // Array of 20-byte SHA1 hashes (one per piece)
-    public let files: [TorrentFileEntry]
-    public let trackerURLs: [String]
+    public var files: [TorrentFileEntry]
+    public var trackerURLs: [String]
     public let webSeedURLs: [String]
     public let isPrivate: Bool
     public let comment: String?

@@ -31,7 +31,7 @@ public actor DHTPeerDiscovery {
         // Query closest nodes for peers
         var allPeers: [(String, UInt16)] = []
         let closest = routingTable.sorted { lhs, rhs in
-            xorDistance(lhs.id, infoHash) < xorDistance(rhs.id, infoHash)
+            xorDistance(lhs.id, infoHash).hexValue < xorDistance(rhs.id, infoHash).hexValue
         }.prefix(8)
 
         for node in closest {
@@ -61,7 +61,7 @@ public actor DHTPeerDiscovery {
 
         // Find closer nodes to ourselves to fill the routing table
         let closer = routingTable.sorted { lhs, rhs in
-            xorDistance(lhs.id, nodeID) < xorDistance(rhs.id, nodeID)
+            xorDistance(lhs.id, nodeID).hexValue < xorDistance(rhs.id, nodeID).hexValue
         }.prefix(4)
 
         for node in closer {
@@ -244,6 +244,11 @@ public actor DHTPeerDiscovery {
             return result
         }
     }
+}
+
+// MARK: - Data Extension
+private extension Data {
+    var hexValue: String { map { String(format: "%02x", $0) }.joined() }
 }
 
 // MARK: - DHT Errors

@@ -319,7 +319,7 @@ public actor PeerConnection {
 
         return try await withThrowingTimeout(seconds: 15) {
             try await withCheckedThrowingContinuation { continuation in
-                pendingPiece = (key: (index, begin), continuation: continuation)
+                self.pendingPiece = (key: (index, begin), continuation: continuation)
             }
         }
     }
