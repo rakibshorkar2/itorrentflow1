@@ -18,6 +18,16 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
     public func applicationDidEnterBackground(_ application: UIApplication) {
         // Schedule background processing when app goes to background
         TorrentEngine.shared.scheduleBackgroundTasks()
+        // Keep app alive with silent audio or location if downloads are active
+        let hasActiveDownloads = TorrentEngine.shared.sessions.contains { $0.status == .downloading }
+        if hasActiveDownloads {
+            switch SettingsManager.shared.backgroundMode {
+            case .audio:
+                BackgroundAudioManager.shared.start()
+            case .location:
+                LocationBackgroundManager.shared.start()
+            }
+        }
     }
 
     public func applicationWillResignActive(_ application: UIApplication) {
@@ -25,6 +35,9 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     public func applicationWillEnterForeground(_ application: UIApplication) {
+        // Stop background keep-alive
+        BackgroundAudioManager.shared.stop()
+        LocationBackgroundManager.shared.stop()
         // Refresh UI immediately
     }
 
@@ -43,6 +56,10 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         if url.scheme?.lowercased() == "magnet" {
             handleMagnetURL(url)
+            return true
+        }
+        if url.scheme?.lowercased() == "itorrentflow" {
+            handleAppURL(url)
             return true
         }
         // .torrent file opened from another app
@@ -65,12 +82,36 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
                 handleMagnetURL(url)
             } else if url.pathExtension.lowercased() == "torrent" {
                 handleTorrentFile(url)
+            } else if url.scheme?.lowercased() == "itorrentflow" {
+                handleAppURL(url)
             }
         }
         return true
     }
 
     // MARK: - Handlers
+    private func handleAppURL(_ url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let host = components.host else { return }
+
+        switch host {
+        case "togglepause":
+            if let torrentID = components.queryItems?.first(where: { $0.name == "torrentID" })?.value {
+                Task { @MainActor in
+                    if let session = TorrentEngine.shared.sessions.first(where: { $0.id.uuidString == torrentID }) {
+                        if session.status.isActive {
+                            session.pause()
+                        } else if session.status == .paused {
+                            session.start()
+                        }
+                    }
+                }
+            }
+        default:
+            break
+        }
+    }
+
     private func handleMagnetURL(_ url: URL) {
         Task { @MainActor in
             do {

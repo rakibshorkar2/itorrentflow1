@@ -29,6 +29,12 @@
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>iTorrentFlow uses the local network to discover peers for torrent downloads.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>iTorrentFlow uses location updates to keep the app alive during background downloads.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>iTorrentFlow uses location updates to keep the app alive during background downloads.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>iTorrentFlow uses location updates to keep the app alive during background downloads.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -40,6 +46,7 @@
         <string>processing</string>
         <string>remote-notification</string>
         <string>audio</string>
+        <string>location</string>
     </array>
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
@@ -76,6 +83,16 @@
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>magnet</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>iTorrentFlow</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>itorrentflow</string>
             </array>
         </dict>
     </array>

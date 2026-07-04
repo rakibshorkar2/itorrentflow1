@@ -263,6 +263,23 @@ public struct AddTorrentView: View {
                 }
             }
 
+            // File selection for .torrent files
+            if !info.isMagnet, let metadata = viewModel.pendingMetadata {
+                VStack(alignment: .leading, spacing: Theme.spacing8) {
+                    Text("Select Files to Download")
+                        .font(Theme.headlineFont())
+                        .foregroundStyle(Theme.textPrimary)
+
+                    FileListView(
+                        files: metadata.files,
+                        filePriorityMap: viewModel.filePriorities,
+                        onPriorityChange: { fileID, priority in
+                            viewModel.filePriorities[fileID] = priority
+                        }
+                    )
+                }
+            }
+
             // Options
             VStack(spacing: Theme.spacing12) {
                 Toggle("Start Immediately", isOn: $viewModel.startImmediately)
@@ -322,6 +339,12 @@ public final class AddTorrentViewModel: ObservableObject {
 
     private var pendingTorrentData: Data?
     var hasPendingFile: Bool { pendingTorrentData != nil }
+    var pendingMetadata: TorrentMetadata? {
+        didSet {
+            filePriorities = Dictionary(uniqueKeysWithValues: pendingMetadata?.files.map { ($0.id, $0.priority) } ?? [:])
+        }
+    }
+    @Published var filePriorities: [UUID: FilePriority] = [:]
 
     func checkClipboard() {
         guard let clipboard = UIPasteboard.general.string, !clipboard.isEmpty else {
@@ -423,6 +446,7 @@ public final class AddTorrentViewModel: ObservableObject {
                 let data = try Data(contentsOf: url)
                 let metadata = try TorrentMetadata.parse(from: data)
                 pendingTorrentData = data
+                pendingMetadata = metadata
                 parsedInfo = ParsedTorrentInfo(
                     name: metadata.name,
                     formattedSize: ByteCountFormatter.string(fromByteCount: metadata.totalSize, countStyle: .file),
@@ -449,6 +473,10 @@ public final class AddTorrentViewModel: ObservableObject {
                 if let data = pendingTorrentData {
                     let session = try TorrentEngine.shared.addTorrent(data: data)
                     session.isSequential = sequentialDownload
+                    // Apply file priorities
+                    for (fileID, priority) in filePriorities {
+                        await session.setFilePriority(fileID: fileID, priority: priority)
+                    }
                     if startImmediately { session.start() }
                 } else {
                     let text = magnetText.trimmingCharacters(in: .whitespacesAndNewlines)

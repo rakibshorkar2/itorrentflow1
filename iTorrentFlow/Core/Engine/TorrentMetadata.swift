@@ -11,6 +11,7 @@ public struct TorrentMetadata {
     public let pieces: [Data]          // Array of 20-byte SHA1 hashes (one per piece)
     public let files: [TorrentFileEntry]
     public let trackerURLs: [String]
+    public let webSeedURLs: [String]
     public let isPrivate: Bool
     public let comment: String?
     public let createdBy: String?
@@ -108,6 +109,7 @@ public struct TorrentMetadata {
             pieces: pieces,
             files: files,
             trackerURLs: trackers,
+            webSeedURLs: [],
             isPrivate: isPrivate,
             comment: rootDict["comment"]?.stringValue,
             createdBy: rootDict["created by"]?.stringValue,

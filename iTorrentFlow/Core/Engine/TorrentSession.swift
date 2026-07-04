@@ -86,6 +86,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
         do {
             // For magnet links (no pieces), fetch metadata from peers first
             if metadata.pieces.isEmpty {
+                await MainActor.run { self.status = .fetchingMetadata }
                 await fetchMetadataFromPeers()
                 if metadata.pieces.isEmpty {
                     await MainActor.run { self.status = .error("Failed to fetch metadata from peers") }
@@ -100,6 +101,12 @@ public final class TorrentSession: ObservableObject, Identifiable {
             var allPeers: [(String, UInt16)] = await announceToTrackers(left: metadata.totalSize)
             status = .downloading
             connectedPeers = 0
+
+            // DHT peer discovery
+            let dht = DHTPeerDiscovery()
+            if let dhtPeers = try? await dht.findPeers(infoHash: metadata.infoHash) {
+                allPeers.append(contentsOf: dhtPeers)
+            }
 
             // Launch periodic tracker re-announce (every 30 min) alongside downloads
             let reannounceTask = Task {
@@ -246,8 +253,16 @@ public final class TorrentSession: ObservableObject, Identifiable {
                 let isPaused = await MainActor.run { [weak self] in self?.status == .paused || self?.status == .stopped }
                 if isPaused { break }
 
-                let idx = await pm.nextMissingPieceIndex
+                let useEndgame = await pm.remainingPieceCount <= 5
+                let idx = useEndgame ? await pm.nextEndgamePieceIndex : await pm.nextMissingPieceIndex
                 guard let pieceIdx = idx else { break }
+
+                // Skip pieces this peer doesn't have
+                let bf = await conn.peerBitfield
+                if pieceIdx < bf.count && !bf[pieceIdx] {
+                    continue
+                }
+
                 await pm.markPieceRequesting(pieceIdx)
 
                 let pLen = pieceLength(for: pieceIdx)
@@ -263,11 +278,14 @@ public final class TorrentSession: ObservableObject, Identifiable {
                             begin: begin,
                             length: reqLen
                         )
-                        try await pm.receivePiece(
+                        let completed = try await pm.receivePiece(
                             index: pieceIdx,
                             begin: Int(begin),
                             data: data
                         )
+                        if completed {
+                            await broadcastHave(index: pieceIdx)
+                        }
                         begin += reqLen
                     } catch PeerError.choked {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -293,6 +311,12 @@ public final class TorrentSession: ObservableObject, Identifiable {
             await MainActor.run { [weak self] in
                 self?.connectedPeers = max(0, (self?.connectedPeers ?? 1) - 1)
             }
+        }
+    }
+
+    private func broadcastHave(index: Int) async {
+        for conn in peerConnections {
+            try? await conn.sendHave(index: UInt32(index))
         }
     }
 
@@ -385,6 +409,30 @@ public final class TorrentSession: ObservableObject, Identifiable {
                 liveActivity = nil
             }
         }
+    }
+
+    // MARK: - File Priority
+    public func setFilePriority(fileID: UUID, priority: FilePriority) async {
+        await pieceManager?.setFilePriority(fileID: fileID, priority: priority)
+        if let idx = metadata.files.firstIndex(where: { $0.id == fileID }) {
+            metadata.files[idx].priority = priority
+        }
+    }
+
+    public func piecesForFile(fileID: UUID) async -> Set<Int> {
+        await pieceManager?.piecesForFile(fileID: fileID) ?? []
+    }
+
+    public var filePriorityMap: [UUID: FilePriority] {
+        get async { await pieceManager?.filePriorityMap ?? [:] }
+    }
+
+    public var effectiveProgress: Double {
+        get async { await pieceManager?.effectiveProgress ?? progress }
+    }
+
+    public var totalDownloadablePieces: Int {
+        get async { await pieceManager?.totalDownloadablePieces ?? metadata.pieces.count }
     }
 }
 

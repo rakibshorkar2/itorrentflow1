@@ -54,6 +54,19 @@ public final class SettingsManager: ObservableObject {
     @Published public var showDynamicIsland: Bool = true {
         didSet { defaults.set(showDynamicIsland, forKey: "showDynamicIsland") }
     }
+    @Published public var autoAddTrackers: Bool = true {
+        didSet { defaults.set(autoAddTrackers, forKey: "autoAddTrackers") }
+    }
+
+    // MARK: - Default Trackers
+    @Published public var defaultTrackerURLs: [String] = DefaultTrackers.list {
+        didSet { defaults.set(defaultTrackerURLs, forKey: "defaultTrackerURLs") }
+    }
+
+    // MARK: - Background
+    @Published public var backgroundMode: BackgroundKeepAliveMode = .audio {
+        didSet { defaults.set(backgroundMode.rawValue, forKey: "backgroundMode") }
+    }
 
     // MARK: - Storage
     @Published public var downloadPath: String = "" {
@@ -75,9 +88,45 @@ public final class SettingsManager: ObservableObject {
         sequentialDownload = defaults.bool(forKey: "sequentialDownload")
         startOnAdd = defaults.object(forKey: "startOnAdd") as? Bool ?? true
         showDynamicIsland = defaults.object(forKey: "showDynamicIsland") as? Bool ?? true
+        autoAddTrackers = defaults.object(forKey: "autoAddTrackers") as? Bool ?? true
+        defaultTrackerURLs = defaults.stringArray(forKey: "defaultTrackerURLs") ?? DefaultTrackers.list
+        if let raw = defaults.string(forKey: "backgroundMode"),
+           let mode = BackgroundKeepAliveMode(rawValue: raw) {
+            backgroundMode = mode
+        }
         if let cat = defaults.string(forKey: "defaultCategory") {
             defaultCategory = TorrentCategory(rawValue: cat) ?? .general
         }
         colorScheme = defaults.string(forKey: "colorScheme") ?? "dark"
     }
+}
+
+// MARK: - Default Trackers
+public enum DefaultTrackers {
+    public static let list: [String] = [
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://tracker.coppersurfer.tk:6969/announce",
+        "udp://tracker.leechers-paradise.org:6969/announce",
+        "udp://tracker.internetwarriors.net:1337/announce",
+        "udp://tracker.zer0day.to:1337/announce",
+        "udp://tracker.tiny-vps.com:6969/announce",
+        "udp://tracker.pirateparty.ca:6969/announce",
+        "udp://tracker.port443.xyz:6969/announce",
+        "http://tracker3.itzmx.com:6961/announce",
+        "udp://open.demonii.com:1337/announce",
+        "udp://exodus.desync.com:6969/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://retracker.lanta-net.ru:2710/announce",
+        "udp://p4p.arenabg.com:1337/announce",
+        "http://tracker1.itzmx.com:8080/announce",
+        "udp://tracker.dler.org:6969/announce",
+        "http://tracker.foreverpirates.co:80/announce",
+        "udp://tracker.opentracker.eu:1337/announce"
+    ]
+}
+
+// MARK: - Background Keep-Alive Mode
+public enum BackgroundKeepAliveMode: String, CaseIterable {
+    case audio = "Silent Audio"
+    case location = "Location"
 }

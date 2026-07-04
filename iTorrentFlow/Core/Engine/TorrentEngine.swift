@@ -56,8 +56,34 @@ public final class TorrentEngine: ObservableObject {
             return existing
         }
 
+        // Auto-add default trackers for non-private torrents
+        var adjustedMeta = metadata
+        if !adjustedMeta.isPrivate && SettingsManager.shared.autoAddTrackers {
+            let existingTrackers = Set(adjustedMeta.trackerURLs)
+            let defaults = Set(SettingsManager.shared.defaultTrackerURLs)
+            let toAdd = defaults.subtracting(existingTrackers)
+            if !toAdd.isEmpty {
+                var merged = adjustedMeta.trackerURLs
+                merged.append(contentsOf: toAdd)
+                adjustedMeta = TorrentMetadata(
+                    infoHash: adjustedMeta.infoHash,
+                    name: adjustedMeta.name,
+                    totalSize: adjustedMeta.totalSize,
+                    pieceLength: adjustedMeta.pieceLength,
+                    pieces: adjustedMeta.pieces,
+                    files: adjustedMeta.files,
+                    trackerURLs: merged,
+                    webSeedURLs: adjustedMeta.webSeedURLs,
+                    isPrivate: adjustedMeta.isPrivate,
+                    comment: adjustedMeta.comment,
+                    createdBy: adjustedMeta.createdBy,
+                    creationDate: adjustedMeta.creationDate
+                )
+            }
+        }
+
         let session = TorrentSession(
-            metadata: metadata,
+            metadata: adjustedMeta,
             downloadDirectory: downloadDirectory
         )
 
@@ -180,6 +206,7 @@ public extension TorrentMetadata {
             pieces: [],
             files: [],
             trackerURLs: magnet.trackers,
+            webSeedURLs: magnet.webSeeds,
             isPrivate: false,
             comment: nil,
             createdBy: nil,

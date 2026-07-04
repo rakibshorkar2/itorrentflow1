@@ -9,6 +9,7 @@ public actor PieceManager {
 
     private var pieceStates: [PieceState]
     var downloadedBytes: Int64 = 0
+    private var filePriorities: [UUID: FilePriority] = [:]
 
     public init(metadata: TorrentMetadata, downloadDirectory: URL) throws {
         self.metadata = metadata
@@ -17,6 +18,7 @@ public actor PieceManager {
             repeating: PieceState(status: .missing, data: nil),
             count: metadata.pieces.count
         )
+        self.filePriorities = Dictionary(uniqueKeysWithValues: metadata.files.map { ($0.id, $0.priority) })
         try FileManager.default.createDirectory(
             at: downloadDirectory.appendingPathComponent(metadata.name),
             withIntermediateDirectories: true
@@ -40,13 +42,82 @@ public actor PieceManager {
     }
 
     public var nextMissingPieceIndex: Int? {
-        pieceStates.firstIndex { $0.status == .missing }
+        for (i, state) in pieceStates.enumerated() {
+            guard state.status == .missing else { continue }
+            if !shouldDownloadPiece(i) { continue }
+            return i
+        }
+        return nil
+    }
+
+    /// Number of pieces still not verified
+    public var remainingPieceCount: Int {
+        pieceStates.filter { $0.status != .verified }.count
+    }
+
+    /// Returns any piece still not verified (missing or downloading) — used in endgame mode
+    public var nextEndgamePieceIndex: Int? {
+        for (i, state) in pieceStates.enumerated() {
+            guard state.status == .missing || state.status == .downloading else { continue }
+            if !shouldDownloadPiece(i) { continue }
+            return i
+        }
+        return nil
+    }
+
+    /// Returns the number of pieces that should be downloaded (non-skipped)
+    public var totalDownloadablePieces: Int {
+        (0..<metadata.pieces.count).filter { shouldDownloadPiece($0) }.count
+    }
+
+    /// Computed progress considering only non-skipped pieces
+    public var effectiveProgress: Double {
+        let total = totalDownloadablePieces
+        guard total > 0 else { return 0 }
+        let done = pieceStates.enumerated().filter { $0.element.status == .verified && shouldDownloadPiece($0.offset) }.count
+        return Double(done) / Double(total)
+    }
+
+    /// Update file priority and reset relevant piece states
+    public func setFilePriority(fileID: UUID, priority: FilePriority) {
+        filePriorities[fileID] = priority
+        if priority == .skip {
+            // Reset any incomplete pieces belonging to this file
+            let pieceIndices = piecesForFile(fileID: fileID)
+            for i in pieceIndices where pieceStates[i].status != .verified {
+                pieceStates[i] = PieceState(status: .missing, data: nil)
+            }
+        }
+    }
+
+    // MARK: - File <-> Piece mapping
+
+    /// Which pieces belong to a given file
+    public func piecesForFile(fileID: UUID) -> Set<Int> {
+        guard let file = metadata.files.first(where: { $0.id == fileID }),
+              let fileRange = fileByteRange(for: file) else { return [] }
+
+        let firstPiece = Int(fileRange.lowerBound / Int64(metadata.pieceLength))
+        let lastPiece = Int((fileRange.upperBound - 1) / Int64(metadata.pieceLength))
+        return Set(firstPiece...lastPiece).filter { $0 < metadata.pieces.count }
+    }
+
+    /// Whether a piece index should be downloaded (at least one non-skipped file needs it)
+    public func shouldDownloadPiece(_ index: Int) -> Bool {
+        let pieceStart = Int64(index) * Int64(metadata.pieceLength)
+        let pieceEnd = pieceStart + Int64(pieceLength(for: index))
+        return metadata.files.contains { file in
+            guard let fr = fileByteRange(for: file),
+                  filePriorities[file.id] != .skip else { return false }
+            return fr.overlaps(pieceStart..<pieceEnd)
+        }
     }
 
     // MARK: - Receive piece data
-    public func receivePiece(index: Int, begin: Int, data: Data) async throws {
-        guard index < pieceStates.count else { return }
-        guard pieceStates[index].status == .missing || pieceStates[index].status == .downloading else { return }
+    @discardableResult
+    public func receivePiece(index: Int, begin: Int, data: Data) async throws -> Bool {
+        guard index < pieceStates.count else { return false }
+        guard pieceStates[index].status == .missing || pieceStates[index].status == .downloading else { return false }
 
         // Accumulate piece data
         var pieceData = pieceStates[index].data ?? Data(
@@ -54,14 +125,21 @@ public actor PieceManager {
         )
 
         let range = begin..<(begin + data.count)
-        guard range.upperBound <= pieceData.count else { return }
+        guard range.upperBound <= pieceData.count else { return false }
         pieceData.replaceSubrange(range, with: data)
         pieceStates[index] = PieceState(status: .downloading, data: pieceData)
 
         // Check if piece is fully downloaded
         if isFullPiece(index: index, data: pieceData) {
             try await verifyAndStore(index: index, data: pieceData)
+            return true
         }
+        return false
+    }
+
+    /// Returns the set of currently verified piece indices
+    public var verifiedPieces: Set<Int> {
+        Set(pieceStates.enumerated().filter { $0.element.status == .verified }.map { $0.offset })
     }
 
     // MARK: - Verification
@@ -88,7 +166,7 @@ public actor PieceManager {
         var dataOffset = Int64(0)
 
         for file in metadata.files {
-            guard let fileRange = fileRange(for: file),
+            guard let fileRange = fileByteRange(for: file),
                   fileRange.overlaps(pieceOffset ..< pieceOffset + remaining) else { continue }
 
             let fileOffset = max(0, pieceOffset - fileRange.lowerBound)
@@ -134,7 +212,7 @@ public actor PieceManager {
         data.count >= pieceLength(for: index)
     }
 
-    private func fileRange(for file: TorrentFileEntry) -> Range<Int64>? {
+    private func fileByteRange(for file: TorrentFileEntry) -> Range<Int64>? {
         var offset: Int64 = 0
         for f in metadata.files {
             if f.id == file.id {
@@ -144,6 +222,8 @@ public actor PieceManager {
         }
         return nil
     }
+
+    public var filePriorityMap: [UUID: FilePriority] { filePriorities }
 
     // MARK: - Mark piece as requested
     public func markPieceRequesting(_ index: Int) {

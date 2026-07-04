@@ -99,6 +99,16 @@ struct TorrentLockScreenView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.5))
             }
+
+            // Pause button on lock screen
+            if let tid = context.attributes.torrentID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                Link(destination: URL(string: "itorrentflow://togglepause?torrentID=\(tid)")!) {
+                    Image(systemName: context.state.isPaused ? "play.circle.fill" : "pause.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(context.state.isPaused ? .cyan : .orange)
+                }
+                .padding(.leading, 4)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -212,6 +222,16 @@ struct ExpandedBottomView: View {
             Text("\(context.state.connectedPeers)")
                 .font(.system(size: 10, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
+
+            // Pause/Resume Button
+            if let torrentID = context.attributes.torrentID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                Link(destination: URL(string: "itorrentflow://togglepause?torrentID=\(torrentID)")!) {
+                    Image(systemName: context.state.isPaused ? "play.circle.fill" : "pause.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(context.state.isPaused ? .cyan : .orange)
+                        .symbolRenderingMode(.hierarchical)
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)

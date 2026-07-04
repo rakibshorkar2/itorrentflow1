@@ -30,6 +30,9 @@ public actor PeerConnection {
     public private(set) var downloadedBytes: Int64 = 0
     public private(set) var uploadedBytes: Int64 = 0
 
+    private var keepAliveTask: Task<Void, Never>?
+    public var peerBitfield: [Bool] { bitfield }
+
     private typealias PieceKey = (index: UInt32, begin: UInt32)
     private var pendingPiece: (key: PieceKey, continuation: CheckedContinuation<Data, Error>)?
 
@@ -69,9 +72,21 @@ public actor PeerConnection {
         try await receiveHandshake()
         handshakeDone = true
         startReceiveLoop()
+        startKeepAliveTask()
         // Send extended handshake immediately for metadata exchange (BEP 10)
         if peerSupportsMetadata {
             sendOurExtendedHandshake()
+        }
+    }
+
+    private func startKeepAliveTask() {
+        keepAliveTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 120 * 1_000_000_000)
+                var msg = Data()
+                msg.append(bigEndian: UInt32(0))
+                try? await send(data: msg)
+            }
         }
     }
 
@@ -309,6 +324,14 @@ public actor PeerConnection {
         }
     }
 
+    public func sendHave(index: UInt32) async throws {
+        var msg = Data()
+        msg.append(bigEndian: UInt32(5))
+        msg.append(UInt8(4)) // have
+        msg.append(bigEndian: index)
+        try await send(data: msg)
+    }
+
     public func sendInterested() async throws {
         var msg = Data()
         msg.append(bigEndian: UInt32(1))
@@ -396,6 +419,8 @@ public actor PeerConnection {
     }
 
     public func disconnect() {
+        keepAliveTask?.cancel()
+        keepAliveTask = nil
         connection?.cancel()
     }
 

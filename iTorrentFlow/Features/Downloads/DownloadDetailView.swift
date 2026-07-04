@@ -6,6 +6,8 @@ public struct DownloadDetailView: View {
     @ObservedObject var session: TorrentSession
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: DetailTab = .overview
+    @State private var showAddTracker = false
+    @State private var newTrackerURL = ""
 
     enum DetailTab: String, CaseIterable {
         case overview = "Overview"
@@ -146,28 +148,27 @@ public struct DownloadDetailView: View {
     // MARK: - Files
     private var filesSection: some View {
         VStack(spacing: Theme.spacing8) {
-            ForEach(session.metadata.files) { file in
-                HStack(spacing: Theme.spacing12) {
-                    Image(systemName: fileIcon(for: file.name))
-                        .font(.system(size: 20))
-                        .foregroundStyle(Theme.accent)
-                        .frame(width: 32)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(file.name)
-                            .font(Theme.bodyFont(size: 14))
-                            .foregroundStyle(Theme.textPrimary)
-                            .lineLimit(2)
-                        Text(file.formattedSize)
-                            .font(Theme.captionFont(size: 11))
-                            .foregroundStyle(Theme.textTertiary)
-                    }
-
-                    Spacer()
+            HStack {
+                Text("File Priority")
+                    .font(Theme.captionFont())
+                    .foregroundStyle(Theme.textTertiary)
+                Spacer()
+                if session.metadata.files.contains(where: { $0.priority == .skip }) {
+                    Text("Skipping files")
+                        .font(Theme.captionFont(size: 10))
+                        .foregroundStyle(Theme.warningColor)
                 }
-                .padding(Theme.spacing12)
-                .glassMorphism(cornerRadius: Theme.radiusMedium)
             }
+
+            FileListView(
+                files: session.metadata.files,
+                filePriorityMap: [:],
+                onPriorityChange: { fileID, priority in
+                    Task {
+                        await session.setFilePriority(fileID: fileID, priority: priority)
+                    }
+                }
+            )
         }
     }
 
@@ -203,6 +204,20 @@ public struct DownloadDetailView: View {
     // MARK: - Trackers
     private var trackersSection: some View {
         VStack(spacing: Theme.spacing8) {
+            HStack {
+                Text("Trackers (\(session.metadata.trackerURLs.count))")
+                    .font(Theme.captionFont())
+                    .foregroundStyle(Theme.textTertiary)
+                Spacer()
+                Button {
+                    showAddTracker = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(Theme.accent)
+                        .font(.system(size: 18))
+                }
+            }
+
             ForEach(session.metadata.trackerURLs, id: \.self) { tracker in
                 HStack {
                     Image(systemName: "antenna.radiowaves.left.and.right")
@@ -219,8 +234,37 @@ public struct DownloadDetailView: View {
                 }
                 .padding(Theme.spacing12)
                 .glassMorphism(cornerRadius: Theme.radiusMedium)
+                .contextMenu {
+                    Button(role: .destructive) {
+                        removeTracker(tracker)
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
             }
         }
+        .alert("Add Tracker", isPresented: $showAddTracker) {
+            TextField("Tracker URL", text: $newTrackerURL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) { newTrackerURL = "" }
+            Button("Add") {
+                addTracker(newTrackerURL)
+                newTrackerURL = ""
+            }
+        } message: {
+            Text("Enter the full announce URL (e.g. udp://tracker.example.com:80/announce)")
+        }
+    }
+
+    private func addTracker(_ url: String) {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        session.metadata.trackerURLs.append(trimmed)
+    }
+
+    private func removeTracker(_ url: String) {
+        session.metadata.trackerURLs.removeAll { $0 == url }
     }
 
     // MARK: - Pieces
