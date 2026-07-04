@@ -17,6 +17,14 @@ settings:
     ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
     CLANG_ENABLE_MODULES: YES
     SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+    OTHER_LDFLAGS: "-ltorrent-rasterbar -lssl -lcrypto"
+    HEADER_SEARCH_PATHS:
+      - "$(SRCROOT)/LibTorrentBuild/ios/include"
+      - "$(SRCROOT)/LibTorrentBuild/ios/include/libtorrent"
+    LIBRARY_SEARCH_PATHS:
+      - "$(SRCROOT)/LibTorrentBuild/ios/lib"
 
 packages:
   swift-async-algorithms:
@@ -31,6 +39,11 @@ targets:
       - path: iTorrentFlow
         excludes:
           - "**/.DS_Store"
+      - path: iTorrentFlow/LibTorrentBridge/LibTorrentBridge.mm
+        compilerFlags:
+          - -x
+          - objective-c++
+      - path: iTorrentFlow/LibTorrentBridge/LibTorrentSession.swift
       - path: iTorrentFlowLiveActivity/TorrentLiveActivityAttributes.swift
     resources:
       - path: iTorrentFlow/Resources
@@ -40,6 +53,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.itorrentflow.app
         INFOPLIST_FILE: iTorrentFlow/Resources/Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: iTorrentFlow/iTorrentFlow-Bridging-Header.h
         CODE_SIGN_STYLE: Manual
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
