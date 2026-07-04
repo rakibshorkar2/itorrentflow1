@@ -33,6 +33,10 @@ public final class TorrentEngine: ObservableObject {
     // MARK: - Add from .torrent file
     public func addTorrent(from fileURL: URL) throws -> TorrentSession {
         let data = try Data(contentsOf: fileURL)
+        return try addTorrent(data: data)
+    }
+
+    public func addTorrent(data: Data) throws -> TorrentSession {
         let metadata = try TorrentMetadata.parse(from: data)
         return try createSession(metadata: metadata)
     }

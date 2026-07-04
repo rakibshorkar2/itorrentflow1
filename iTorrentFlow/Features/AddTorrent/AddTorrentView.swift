@@ -36,7 +36,7 @@ public struct AddTorrentView: View {
                         }
 
                         // Start button
-                        if viewModel.parsedInfo != nil || viewModel.magnetText.count > 20 {
+                        if viewModel.parsedInfo != nil || viewModel.magnetText.count > 20 || viewModel.hasPendingFile {
                             startButton
                         }
                     }
@@ -246,6 +246,9 @@ public final class AddTorrentViewModel: ObservableObject {
     @Published var sequentialDownload: Bool = false
     @Published var didStart: Bool = false
 
+    private var pendingTorrentData: Data?
+    var hasPendingFile: Bool { pendingTorrentData != nil }
+
     func validateMagnet(_ text: String) {
         errorMessage = nil
         parsedInfo = nil
@@ -274,7 +277,7 @@ public final class AddTorrentViewModel: ObservableObject {
             do {
                 let data = try Data(contentsOf: url)
                 let metadata = try TorrentMetadata.parse(from: data)
-                magnetText = metadata.magnetLink
+                pendingTorrentData = data
                 parsedInfo = ParsedTorrentInfo(
                     name: metadata.name,
                     formattedSize: ByteCountFormatter.string(fromByteCount: metadata.totalSize, countStyle: .file),
@@ -290,15 +293,25 @@ public final class AddTorrentViewModel: ObservableObject {
     }
 
     func startDownload() {
-        guard !magnetText.isEmpty else { return }
         isLoading = true
         errorMessage = nil
 
         Task {
             do {
-                let session = try TorrentEngine.shared.addTorrent(magnetURL: magnetText)
-                session.isSequential = sequentialDownload
-                if startImmediately { session.start() }
+                if let data = pendingTorrentData {
+                    let session = try TorrentEngine.shared.addTorrent(data: data)
+                    session.isSequential = sequentialDownload
+                    if startImmediately { session.start() }
+                } else {
+                    guard !magnetText.isEmpty else {
+                        errorMessage = "Enter a magnet link or select a .torrent file"
+                        isLoading = false
+                        return
+                    }
+                    let session = try TorrentEngine.shared.addTorrent(magnetURL: magnetText)
+                    session.isSequential = sequentialDownload
+                    if startImmediately { session.start() }
+                }
                 didStart = true
             } catch {
                 errorMessage = error.localizedDescription
