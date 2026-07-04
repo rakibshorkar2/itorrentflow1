@@ -51,6 +51,7 @@ enum AppTab: Hashable {
 struct MainTabView: View {
     @Binding var selectedTab: AppTab
     @EnvironmentObject var engine: TorrentEngine
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var settings = SettingsManager.shared
     @State private var addSheetVisible = false
 

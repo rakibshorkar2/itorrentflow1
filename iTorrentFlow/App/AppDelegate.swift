@@ -29,7 +29,9 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ application: UIApplication) {
-        // Save state before termination
+        // End all Live Activities and save state before termination
+        TorrentEngine.shared.sessions.forEach { $0.endLiveActivity() }
+        TorrentEngine.shared.pauseAll()
     }
 
     // MARK: - Open URL (Magnet Links)

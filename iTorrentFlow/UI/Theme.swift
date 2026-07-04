@@ -8,7 +8,11 @@ public enum Theme {
         let setting = SettingsManager.shared.colorScheme
         if setting == "dark" { return true }
         if setting == "light" { return false }
-        return UITraitCollection.current.userInterfaceStyle == .dark
+        // System mode — get from the active window scene's trait collection
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            return scene.traitCollection.userInterfaceStyle == .dark
+        }
+        return false
     }
 
     // MARK: - Colors

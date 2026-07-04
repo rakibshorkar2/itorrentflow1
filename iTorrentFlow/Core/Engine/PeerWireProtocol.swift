@@ -302,8 +302,10 @@ public actor PeerConnection {
         msg.append(bigEndian: length)
         try await send(data: msg)
 
-        return try await withCheckedThrowingContinuation { continuation in
-            pendingPiece = (key: (index, begin), continuation: continuation)
+        return try await withThrowingTimeout(seconds: 15) {
+            try await withCheckedThrowingContinuation { continuation in
+                pendingPiece = (key: (index, begin), continuation: continuation)
+            }
         }
     }
 
