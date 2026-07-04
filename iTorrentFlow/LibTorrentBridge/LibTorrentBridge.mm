@@ -221,15 +221,15 @@ void lt_session_resume_all(LTSessionRef session) { get_session(session)->ses.res
 #else
 
 // Stub implementations — LibTorrent not available
-struct lt_session {
+struct lt_session_handle {
     LTStatusCallback statusCb;
     LTPieceCallback pieceCb;
     LTLogCallback logCb;
 };
 
-static lt_session *get_session(LTSessionRef ref) { return static_cast<lt_session *>(ref); }
+static lt_session_handle *get_session(LTSessionRef ref) { return ref; }
 
-LTSessionRef lt_session_create(void) { return new lt_session(); }
+LTSessionRef lt_session_create(void) { return new lt_session_handle(); }
 void lt_session_destroy(LTSessionRef session) { delete get_session(session); }
 void lt_session_set_listen_port(LTSessionRef session, int port) {}
 void lt_session_set_max_connections(LTSessionRef session, int max) {}
