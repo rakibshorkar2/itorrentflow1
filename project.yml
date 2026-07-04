@@ -22,7 +22,7 @@ packages:
   # Pure-Swift async/await networking utilities
   swift-async-algorithms:
     url: https://github.com/apple/swift-async-algorithms
-    from: "1.0.0"
+    exactVersion: "1.0.0"
 
 targets:
   iTorrentFlow:
@@ -68,6 +68,7 @@ targets:
   iTorrentFlowLiveActivity:
     type: app-extension
     platform: iOS
+    deploymentTarget: "16.1"
     sources:
       - path: iTorrentFlowLiveActivity
     settings:
