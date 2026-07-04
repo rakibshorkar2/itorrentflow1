@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Add Torrent View
 public struct AddTorrentView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = AddTorrentViewModel()
@@ -8,53 +7,142 @@ public struct AddTorrentView: View {
 
     public var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.backgroundGradient.ignoresSafeArea()
-
-                ScrollView {
-                    VStack(spacing: Theme.spacing20) {
-                        // Icon
-                        headerIcon
-
-                        // Clipboard banner
-                        if viewModel.clipboardHasMagnet && viewModel.magnetText.isEmpty {
-                            clipboardBanner
-                        }
-
-                        // Magnet Link Input
-                        magnetSection
-
-                        // Or divider
-                        orDivider
-
-                        // File picker button
-                        filePickerButton
-
-                        // Options (if torrent parsed)
-                        if let info = viewModel.parsedInfo {
-                            torrentOptionsSection(info: info)
-                        }
-
-                        // Error
-                        if let error = viewModel.errorMessage {
-                            ErrorBanner(message: error)
-                        }
-
-                        // Start button
-                        if viewModel.parsedInfo != nil || viewModel.magnetText.count > 20 || viewModel.hasPendingFile {
-                            startButton
+            Form {
+                // MARK: Magnet Link
+                Section {
+                    if viewModel.clipboardHasMagnet && viewModel.magnetText.isEmpty {
+                        Button {
+                            viewModel.pasteClipboard()
+                        } label: {
+                            Label("Magnet Link Detected — Tap to paste", systemImage: "doc.on.clipboard")
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.accent)
                         }
                     }
-                    .padding(Theme.spacing20)
+
+                    TextField("Paste magnet link, info hash, or URN...", text: $viewModel.magnetText, axis: .vertical)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .focused($isMagnetFocused)
+                        .lineLimit(3...6)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onChange(of: viewModel.magnetText) { _ in
+                            viewModel.validateMagnet(viewModel.magnetText)
+                        }
+
+                    HStack {
+                        if !viewModel.magnetText.isEmpty {
+                            Button("Clear", role: .destructive) {
+                                viewModel.magnetText = ""
+                                viewModel.parsedInfo = nil
+                                viewModel.errorMessage = nil
+                            }
+                            .font(.caption)
+                        }
+                        Spacer()
+                        Button {
+                            viewModel.pasteClipboard()
+                        } label: {
+                            Label("Paste", systemImage: "doc.on.clipboard")
+                                .font(.caption)
+                        }
+                    }
+                } header: {
+                    Label("Magnet Link", systemImage: "link")
+                }
+
+                // MARK: Or Import
+                Section {
+                    Button {
+                        viewModel.showFilePicker = true
+                    } label: {
+                        Label("Import .torrent File", systemImage: "doc.badge.plus")
+                    }
+                } header: {
+                    Label("Or Import File", systemImage: "folder")
+                }
+
+                // MARK: Torrent Info
+                if let info = viewModel.parsedInfo {
+                    Section("Torrent Info") {
+                        LabeledContent("Name", value: info.name)
+                        LabeledContent("Size", value: info.formattedSize)
+                        if info.isMagnet {
+                            LabeledContent("Trackers", value: "\(info.trackerCount)")
+                            LabeledContent("Hash", value: info.infoHash)
+                        } else {
+                            LabeledContent("Files", value: "\(info.fileCount)")
+                            LabeledContent("Pieces", value: "\(info.pieceCount)")
+                            LabeledContent("Trackers", value: "\(info.trackerCount)")
+                        }
+                    }
+                }
+
+                // MARK: File Selection
+                if !(viewModel.parsedInfo?.isMagnet ?? true), let metadata = viewModel.pendingMetadata {
+                    Section("Select Files to Download") {
+                        ForEach(metadata.files) { file in
+                            FilePriorityRow(
+                                file: file,
+                                priority: viewModel.filePriorities[file.id] ?? file.priority,
+                                onChange: { priority in
+                                    viewModel.filePriorities[file.id] = priority
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // MARK: Options
+                if viewModel.parsedInfo != nil || viewModel.hasPendingFile {
+                    Section("Options") {
+                        Toggle("Start Immediately", isOn: $viewModel.startImmediately)
+                        Toggle("Sequential Download", isOn: $viewModel.sequentialDownload)
+                    }
+                }
+
+                // MARK: Error
+                if let error = viewModel.errorMessage {
+                    Section {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+
+                // MARK: Start Button
+                if viewModel.parsedInfo != nil || viewModel.magnetText.count > 20 || viewModel.hasPendingFile {
+                    Section {
+                        Button {
+                            viewModel.startDownload()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if viewModel.isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Start Download")
+                                        .font(.headline)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .disabled(viewModel.isLoading)
+                        .listRowBackground(Theme.accent)
+                        .foregroundStyle(.white)
+                    }
                 }
             }
             .navigationTitle("Add Torrent")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(Theme.textSecondary)
                 }
             }
             .fileImporter(
@@ -71,254 +159,6 @@ public struct AddTorrentView: View {
                 viewModel.checkClipboard()
             }
         }
-        .presentationDetents([.large])
-        .preferredColorScheme(.dark)
-    }
-
-    // MARK: - Header
-    private var headerIcon: some View {
-        ZStack {
-            Circle()
-                .fill(Theme.accentGradient)
-                .frame(width: 72, height: 72)
-                .shadow(color: Theme.accent.opacity(0.4), radius: 20, x: 0, y: 8)
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(.black)
-        }
-        .padding(.top, Theme.spacing8)
-    }
-
-    // MARK: - Clipboard Banner
-    private var clipboardBanner: some View {
-        Button {
-            viewModel.pasteClipboard()
-        } label: {
-            HStack(spacing: Theme.spacing12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Theme.accent.opacity(0.2))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Theme.accent)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Magnet Link Detected")
-                        .font(Theme.captionFont(size: 13))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Tap to paste from clipboard")
-                        .font(Theme.captionFont(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                Spacer()
-                Image(systemName: "arrow.right.circle.fill")
-                    .foregroundStyle(Theme.accent)
-                    .font(.system(size: 20))
-            }
-            .padding(Theme.spacing12)
-            .background(Theme.accent.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusMedium)
-                    .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .transition(.move(edge: .top).combined(with: .opacity))
-    }
-
-    // MARK: - Magnet Section
-    private var magnetSection: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing8) {
-            Label("Magnet Link", systemImage: "link")
-                .font(Theme.captionFont())
-                .foregroundStyle(Theme.textTertiary)
-
-            ZStack(alignment: .topLeading) {
-                if viewModel.magnetText.isEmpty {
-                    Text("Paste magnet link, info hash, or URN...")
-                        .font(Theme.monoFont(size: 13))
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(.top, 10)
-                        .padding(.leading, 14)
-                        .allowsHitTesting(false)
-                }
-
-                TextEditor(text: $viewModel.magnetText)
-                    .font(Theme.monoFont(size: 12))
-                    .foregroundStyle(Theme.textPrimary)
-                    .tint(Theme.accent)
-                    .scrollContentBackground(.hidden)
-                    .focused($isMagnetFocused)
-                    .frame(minHeight: 72, maxHeight: 100)
-                    .onChange(of: viewModel.magnetText) { newText in
-                        viewModel.validateMagnet(newText)
-                    }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusMedium)
-                    .stroke(
-                        viewModel.parsedInfo != nil ? Color.green.opacity(0.5) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .padding(Theme.spacing12)
-            .glassMorphism(cornerRadius: Theme.radiusMedium)
-
-            // Paste button with clipboard indicator
-            HStack {
-                if !viewModel.magnetText.isEmpty {
-                    Button {
-                        viewModel.magnetText = ""
-                        viewModel.parsedInfo = nil
-                        viewModel.errorMessage = nil
-                    } label: {
-                        Label("Clear", systemImage: "xmark.circle.fill")
-                            .font(Theme.captionFont(size: 12))
-                            .foregroundStyle(Theme.textTertiary)
-                    }
-                }
-                Spacer()
-                Button {
-                    viewModel.pasteClipboard()
-                } label: {
-                    Label(
-                        viewModel.clipboardHasMagnet ? "Paste Magnet" : "Paste",
-                        systemImage: "doc.on.clipboard"
-                    )
-                    .font(Theme.captionFont(size: 12))
-                    .foregroundStyle(viewModel.clipboardHasMagnet ? Theme.accent : Theme.textTertiary)
-                }
-            }
-        }
-    }
-
-    // MARK: - Or Divider
-    private var orDivider: some View {
-        HStack(spacing: Theme.spacing12) {
-            Rectangle()
-                .fill(Theme.divider)
-                .frame(height: 1)
-            Text("OR")
-                .font(Theme.captionFont(size: 12))
-                .foregroundStyle(Theme.textTertiary)
-            Rectangle()
-                .fill(Theme.divider)
-                .frame(height: 1)
-        }
-    }
-
-    // MARK: - File Picker
-    private var filePickerButton: some View {
-        Button {
-            viewModel.showFilePicker = true
-        } label: {
-            HStack(spacing: Theme.spacing12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Theme.accentSecondary.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Theme.accentSecondary)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Import .torrent File")
-                        .font(Theme.headlineFont(size: 15))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("Browse from Files app")
-                        .font(Theme.captionFont(size: 12))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Theme.textTertiary)
-            }
-            .padding(Theme.spacing16)
-            .glassMorphism(cornerRadius: Theme.radiusLarge)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    // MARK: - Torrent Options
-    private func torrentOptionsSection(info: ParsedTorrentInfo) -> some View {
-        VStack(alignment: .leading, spacing: Theme.spacing12) {
-            Text("Torrent Info")
-                .font(Theme.headlineFont())
-                .foregroundStyle(Theme.textPrimary)
-
-            GlassCard {
-                VStack(spacing: Theme.spacing8) {
-                    InfoRow(label: "Name", value: info.name)
-                    InfoRow(label: "Size", value: info.formattedSize)
-                    if info.isMagnet {
-                        InfoRow(label: "Trackers", value: "\(info.trackerCount)")
-                        InfoRow(label: "Hash", value: info.infoHash)
-                    } else {
-                        InfoRow(label: "Files", value: "\(info.fileCount)")
-                        InfoRow(label: "Pieces", value: "\(info.pieceCount)")
-                        InfoRow(label: "Trackers", value: "\(info.trackerCount)")
-                    }
-                }
-            }
-
-            // File selection for .torrent files
-            if !info.isMagnet, let metadata = viewModel.pendingMetadata {
-                VStack(alignment: .leading, spacing: Theme.spacing8) {
-                    Text("Select Files to Download")
-                        .font(Theme.headlineFont())
-                        .foregroundStyle(Theme.textPrimary)
-
-                    FileListView(
-                        files: metadata.files,
-                        filePriorityMap: viewModel.filePriorities,
-                        onPriorityChange: { fileID, priority in
-                            viewModel.filePriorities[fileID] = priority
-                        }
-                    )
-                }
-            }
-
-            // Options
-            VStack(spacing: Theme.spacing12) {
-                Toggle("Start Immediately", isOn: $viewModel.startImmediately)
-                    .toggleStyle(SwitchToggleStyle(tint: Theme.accent))
-                    .foregroundStyle(Theme.textPrimary)
-
-                Toggle("Sequential Download", isOn: $viewModel.sequentialDownload)
-                    .toggleStyle(SwitchToggleStyle(tint: Theme.accent))
-                    .foregroundStyle(Theme.textPrimary)
-            }
-            .cardStyle()
-        }
-    }
-
-    // MARK: - Start Button
-    private var startButton: some View {
-        Button {
-            viewModel.startDownload()
-        } label: {
-            HStack(spacing: Theme.spacing8) {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(.black)
-                        .scaleEffect(0.8)
-                } else {
-                    Image(systemName: "play.fill")
-                }
-                Text(viewModel.isLoading ? "Adding..." : "Start Download")
-                    .font(Theme.headlineFont())
-            }
-            .foregroundStyle(.black)
-            .frame(maxWidth: .infinity)
-            .padding(Theme.spacing16)
-            .background(Theme.accentGradient)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge))
-            .shadow(color: Theme.accent.opacity(0.4), radius: 12, x: 0, y: 4)
-        }
-        .disabled(viewModel.isLoading)
-        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -378,21 +218,17 @@ public final class AddTorrentViewModel: ObservableObject {
     }
 
     private func extractMagnet(from text: String) -> String? {
-        // Try full magnet link
         if text.lowercased().contains("magnet:?") {
             if let range = text.range(of: "magnet:\\?.*?(?=$|\\s)", options: [.regularExpression, .caseInsensitive]) {
                 return String(text[range])
             }
         }
-        // Try bare info hash (40 hex chars)
         if let range = text.range(of: "[0-9a-fA-F]{40}", options: .regularExpression) {
             return String(text[range])
         }
-        // Try base32 (32 chars)
         if let range = text.range(of: "[A-Za-z2-7]{32}", options: .regularExpression) {
             return String(text[range])
         }
-        // Try URN
         if text.lowercased().contains("urn:btih:") {
             if let range = text.range(of: "urn:btih:[0-9a-fA-F]{40}", options: [.regularExpression, .caseInsensitive]) {
                 return String(text[range])
@@ -418,7 +254,6 @@ public final class AddTorrentViewModel: ObservableObject {
                     isMagnet: true
                 )
             } else {
-                // Minimal magnet (just hash) — still show it but mark as minimal
                 parsedInfo = ParsedTorrentInfo(
                     name: "Magnet Link",
                     formattedSize: "Unknown",
@@ -431,9 +266,7 @@ public final class AddTorrentViewModel: ObservableObject {
             }
         } catch let error as MagnetError {
             errorMessage = error.localizedDescription
-        } catch {
-            // Unknown error — ignore during typing
-        }
+        } catch {}
     }
 
     func handleFileImport(result: Result<[URL], Error>) {
@@ -455,7 +288,7 @@ public final class AddTorrentViewModel: ObservableObject {
                     fileCount: max(metadata.files.count, 1),
                     pieceCount: metadata.pieces.count,
                     trackerCount: metadata.trackerURLs.count,
-                    infoHash: metadata.infoHashHex.prefix(16) + "...",
+                    infoHash: String(metadata.infoHashHex.prefix(16)) + "...",
                     isMagnet: false
                 )
             } catch {
@@ -469,13 +302,11 @@ public final class AddTorrentViewModel: ObservableObject {
     func startDownload() {
         isLoading = true
         errorMessage = nil
-
         Task {
             do {
                 if let data = pendingTorrentData {
                     let session = try TorrentEngine.shared.addTorrent(data: data)
                     session.isSequential = sequentialDownload
-                    // Apply file priorities
                     for (fileID, priority) in filePriorities {
                         await session.setFilePriority(fileID: fileID, priority: priority)
                     }
@@ -500,7 +331,6 @@ public final class AddTorrentViewModel: ObservableObject {
     }
 }
 
-// MARK: - Parsed Info
 public struct ParsedTorrentInfo {
     let name: String
     let formattedSize: String
@@ -509,28 +339,4 @@ public struct ParsedTorrentInfo {
     let trackerCount: Int
     let infoHash: String
     let isMagnet: Bool
-}
-
-// MARK: - Error Banner
-struct ErrorBanner: View {
-    let message: String
-
-    var body: some View {
-        HStack(spacing: Theme.spacing8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-            Text(message)
-                .font(Theme.captionFont(size: 12))
-                .foregroundStyle(.red)
-                .multilineTextAlignment(.leading)
-        }
-        .padding(Theme.spacing12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.red.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.radiusMedium)
-                .stroke(Color.red.opacity(0.3), lineWidth: 1)
-        )
-    }
 }

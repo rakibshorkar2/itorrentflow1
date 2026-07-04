@@ -180,16 +180,3 @@ public struct PeerInfo: Identifiable, Codable {
     }
 }
 
-// MARK: - Speed Data Point (for Charts)
-public struct SpeedDataPoint: Identifiable {
-    public let id = UUID()
-    public let timestamp: Date
-    public let downloadSpeed: Double
-    public let uploadSpeed: Double
-
-    public init(timestamp: Date = Date(), downloadSpeed: Double, uploadSpeed: Double) {
-        self.timestamp = timestamp
-        self.downloadSpeed = downloadSpeed
-        self.uploadSpeed = uploadSpeed
-    }
-}

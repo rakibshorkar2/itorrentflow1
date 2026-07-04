@@ -1,59 +1,42 @@
 import SwiftUI
 
-// MARK: - Downloads View
 public struct DownloadsView: View {
     @StateObject private var viewModel = DownloadsViewModel()
     @State private var selectedSession: TorrentSession? = nil
-    @State private var showDetail: Bool = false
-    @State private var headerOffset: CGFloat = 0
+    @State private var showAddSheet = false
 
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Background
-                Theme.backgroundGradient
-                    .ignoresSafeArea()
+            List {
+                statsSection
 
-                VStack(spacing: 0) {
-                    // Stats Header
-                    statsHeader
-                        .padding(.horizontal, Theme.spacing16)
-                        .padding(.top, Theme.spacing8)
-
-                    // Filter Chips
-                    filterChips
-                        .padding(.top, Theme.spacing12)
-
-                    // Search Bar
-                    searchBar
-                        .padding(.horizontal, Theme.spacing16)
-                        .padding(.top, Theme.spacing8)
-
-                    // Torrent List
-                    if viewModel.filteredSessions.isEmpty {
-                        emptyState
-                    } else {
-                        torrentList
-                    }
+                if viewModel.filteredSessions.isEmpty {
+                    emptySection
+                } else {
+                    torrentsSection
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Downloads")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .searchable(text: $viewModel.searchText, prompt: "Search torrents")
+            .refreshable {
+                // Refresh tracker announces
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     sortMenu
-                    addButton
+                    addMenu
                 }
                 ToolbarItemGroup(placement: .topBarLeading) {
                     bulkActionsMenu
                 }
             }
-            .sheet(isPresented: $viewModel.showAddSheet) {
-                AddTorrentView()
-            }
             .sheet(item: $selectedSession) { session in
                 DownloadDetailView(session: session)
+            }
+            .sheet(isPresented: $showAddSheet) {
+                AddTorrentView()
             }
             .fileImporter(
                 isPresented: $viewModel.showDocumentPicker,
@@ -65,133 +48,140 @@ public struct DownloadsView: View {
         }
     }
 
-    // MARK: - Stats Header
-    private var statsHeader: some View {
-        HStack(spacing: Theme.spacing12) {
-            StatCard(
-                label: "Downloading",
-                value: "\(TorrentEngine.shared.activeTorrents)",
-                icon: "arrow.down.circle.fill",
-                color: Theme.downloadColor
-            )
-            StatCard(
-                label: "↓ Speed",
-                value: formatSpeed(viewModel.totalDownloadSpeed),
-                icon: "arrow.down",
-                color: Theme.downloadColor
-            )
-            StatCard(
-                label: "↑ Speed",
-                value: formatSpeed(viewModel.totalUploadSpeed),
-                icon: "arrow.up",
-                color: Theme.uploadColor
-            )
+    // MARK: - Stats Section
+    private var statsSection: some View {
+        Section {
+            HStack {
+                StatItem(
+                    label: "Active",
+                    value: "\(TorrentEngine.shared.activeTorrents)",
+                    icon: "arrow.down.circle.fill",
+                    color: .blue
+                )
+                Divider()
+                StatItem(
+                    label: "Download",
+                    value: formatSpeed(viewModel.totalDownloadSpeed),
+                    icon: "arrow.down",
+                    color: .blue
+                )
+                Divider()
+                StatItem(
+                    label: "Upload",
+                    value: formatSpeed(viewModel.totalUploadSpeed),
+                    icon: "arrow.up",
+                    color: .green
+                )
+            }
+            .frame(maxWidth: .infinity)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color(.systemGroupedBackground))
         }
     }
 
-    // MARK: - Filter Chips
-    private var filterChips: some View {
+    // MARK: - Torrents Section
+    private var torrentsSection: some View {
+        Section {
+            ForEach(viewModel.filteredSessions) { session in
+                DownloadRowView(session: session)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedSession = session
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            TorrentEngine.shared.remove(session: session, deleteFiles: false)
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                        if session.status.isActive {
+                            Button {
+                                session.pause()
+                            } label: {
+                                Label("Pause", systemImage: "pause.fill")
+                            }
+                            .tint(.orange)
+                        } else {
+                            Button {
+                                session.start()
+                            } label: {
+                                Label("Resume", systemImage: "play.fill")
+                            }
+                            .tint(.green)
+                        }
+                    }
+                    .contextMenu {
+                        TorrentContextMenu(session: session)
+                    }
+            }
+        } header: {
+            filterSection
+        }
+    }
+
+    // MARK: - Filter
+    private var filterSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.spacing8) {
+            HStack(spacing: 8) {
                 ForEach(viewModel.filterOptions, id: \.0) { label, status in
-                    FilterChip(
-                        label: label,
-                        isSelected: viewModel.selectedFilter == status
-                    ) {
+                    Button {
                         withAnimation(Theme.snappy) {
                             viewModel.selectedFilter = viewModel.selectedFilter == status ? nil : status
                         }
+                    } label: {
+                        Text(label)
+                            .font(.subheadline)
+                            .foregroundStyle(viewModel.selectedFilter == status ? Color.white : .primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(viewModel.selectedFilter == status ? Theme.accent : Color(.quaternarySystemFill))
+                            .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, Theme.spacing16)
+            .padding(.vertical, 4)
         }
-    }
-
-    // MARK: - Search Bar
-    private var searchBar: some View {
-        HStack(spacing: Theme.spacing8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Theme.textTertiary)
-            TextField("Search torrents...", text: $viewModel.searchText)
-                .foregroundStyle(Theme.textPrimary)
-                .tint(Theme.accent)
-            if !viewModel.searchText.isEmpty {
-                Button { viewModel.searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Theme.textTertiary)
-                }
-            }
-        }
-        .padding(Theme.spacing12)
-        .glassMorphism(cornerRadius: Theme.radiusMedium)
-    }
-
-    // MARK: - Torrent List
-    private var torrentList: some View {
-        ScrollView {
-            LazyVStack(spacing: Theme.spacing8) {
-                ForEach(viewModel.filteredSessions) { session in
-                    DownloadRowView(session: session) {
-                        selectedSession = session
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
-                }
-            }
-            .padding(.horizontal, Theme.spacing16)
-            .padding(.top, Theme.spacing12)
-            .padding(.bottom, 100) // Tab bar clearance
-        }
-        .scrollIndicators(.hidden)
+        .textCase(nil)
     }
 
     // MARK: - Empty State
-    private var emptyState: some View {
-        VStack(spacing: Theme.spacing20) {
-            Spacer()
-            Image(systemName: "arrow.down.to.line.circle")
-                .font(.system(size: 60))
-                .foregroundStyle(
-                    LinearGradient(colors: [Theme.accent.opacity(0.7), Theme.accentSecondary.opacity(0.5)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-            VStack(spacing: Theme.spacing8) {
-                Text("No Downloads")
-                    .font(Theme.titleFont(size: 22))
-                    .foregroundStyle(Theme.textPrimary)
+    private var emptySection: some View {
+        Section {
+            VStack(spacing: 16) {
+                Spacer().frame(height: 40)
+                Image(systemName: "arrow.down.to.line.circle")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                Text(viewModel.searchText.isEmpty ? "No Downloads" : "No Results")
+                    .font(.title3.weight(.semibold))
                 Text(viewModel.searchText.isEmpty
                      ? "Add a magnet link or .torrent file to get started"
-                     : "No results matching '\(viewModel.searchText)'")
-                    .font(Theme.bodyFont())
-                    .foregroundStyle(Theme.textSecondary)
+                     : "No torrents matching '\(viewModel.searchText)'")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-            }
-            if viewModel.searchText.isEmpty {
-                Button {
-                    viewModel.showAddSheet = true
-                } label: {
-                    Label("Add Torrent", systemImage: "plus.circle.fill")
-                        .font(Theme.headlineFont())
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, Theme.spacing24)
-                        .padding(.vertical, Theme.spacing12)
-                        .background(Theme.accentGradient)
-                        .clipShape(Capsule())
+                if viewModel.searchText.isEmpty {
+                    Button {
+                        showAddSheet = true
+                    } label: {
+                        Label("Add Torrent", systemImage: "plus.circle.fill")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
+                Spacer().frame(height: 40)
             }
-            Spacer()
+            .frame(maxWidth: .infinity)
+            .listRowBackground(Color(.systemGroupedBackground))
         }
-        .padding(Theme.spacing24)
     }
 
-    // MARK: - Toolbar
-    private var addButton: some View {
+    // MARK: - Toolbar Menus
+    private var addMenu: some View {
         Menu {
             Button {
-                viewModel.showAddSheet = true
+                showAddSheet = true
             } label: {
                 Label("Magnet Link", systemImage: "link")
             }
@@ -201,10 +191,7 @@ public struct DownloadsView: View {
                 Label("Torrent File", systemImage: "doc.badge.plus")
             }
         } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 22))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Theme.accent)
+            Image(systemName: "plus")
         }
     }
 
@@ -214,16 +201,11 @@ public struct DownloadsView: View {
                 Button {
                     withAnimation(Theme.snappy) { viewModel.sortOrder = order }
                 } label: {
-                    Label(
-                        order.rawValue,
-                        systemImage: viewModel.sortOrder == order ? "checkmark" : ""
-                    )
+                    Label(order.rawValue, systemImage: viewModel.sortOrder == order ? "checkmark" : "")
                 }
             }
         } label: {
-            Image(systemName: "arrow.up.arrow.down.circle")
-                .font(.system(size: 20))
-                .foregroundStyle(Theme.textSecondary)
+            Image(systemName: "arrow.up.arrow.down")
         }
     }
 
@@ -237,14 +219,11 @@ public struct DownloadsView: View {
             }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .font(.system(size: 20))
-                .foregroundStyle(Theme.textSecondary)
         }
     }
 
-    // MARK: - Helpers
     private func formatSpeed(_ bps: Int64) -> String {
-        return ByteCountFormatter.string(fromByteCount: bps, countStyle: .binary) + "/s"
+        ByteCountFormatter.string(fromByteCount: bps, countStyle: .binary) + "/s"
     }
 
     private func handleTorrentImport(result: Result<[URL], Error>) {
@@ -266,63 +245,29 @@ public struct DownloadsView: View {
     }
 }
 
-// MARK: - Stat Card
-struct StatCard: View {
+// MARK: - Stat Item
+struct StatItem: View {
     let label: String
     let value: String
     let icon: String
     let color: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 2) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(color)
                 Text(label)
-                    .font(Theme.captionFont(size: 10))
-                    .foregroundStyle(Theme.textTertiary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             Text(value)
-                .font(Theme.headlineFont(size: 16))
-                .foregroundStyle(Theme.textPrimary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
                 .monospacedDigit()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.spacing12)
-        .glassMorphism(cornerRadius: Theme.radiusMedium)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
-}
-
-// MARK: - Filter Chip
-struct FilterChip: View {
-    let label: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(Theme.captionFont(size: 12))
-                .foregroundStyle(isSelected ? .black : Theme.textSecondary)
-                .padding(.horizontal, Theme.spacing12)
-                .padding(.vertical, Theme.spacing6)
-                .background(
-                    isSelected
-                        ? AnyShapeStyle(Theme.accentGradient)
-                        : AnyShapeStyle(Theme.surface.opacity(0.8))
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.clear : Theme.glassBorder, lineWidth: 1)
-                )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Fix for spacing
-private extension Theme {
-    static let spacing6: CGFloat = 6
 }

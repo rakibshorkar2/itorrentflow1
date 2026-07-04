@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - File List View with Priority Controls
 public struct FileListView: View {
     let files: [TorrentFileEntry]
     let filePriorityMap: [UUID: FilePriority]
@@ -17,40 +16,37 @@ public struct FileListView: View {
     }
 
     public var body: some View {
-        VStack(spacing: Theme.spacing8) {
-            ForEach(files) { file in
-                FilePriorityRow(
-                    file: file,
-                    priority: filePriorityMap[file.id] ?? file.priority,
-                    onChange: { onPriorityChange(file.id, $0) }
-                )
-            }
+        ForEach(files) { file in
+            FilePriorityRow(
+                file: file,
+                priority: filePriorityMap[file.id] ?? file.priority,
+                onChange: { onPriorityChange(file.id, $0) }
+            )
         }
     }
 }
 
-// MARK: - File Priority Row
 struct FilePriorityRow: View {
     let file: TorrentFileEntry
     let priority: FilePriority
     let onChange: (FilePriority) -> Void
 
     var body: some View {
-        HStack(spacing: Theme.spacing12) {
+        HStack(spacing: 12) {
             Image(systemName: iconName(for: file.name))
-                .font(.system(size: 18))
-                .foregroundStyle(priority == .skip ? Theme.textTertiary : Theme.accent)
-                .frame(width: 28)
+                .font(.title3)
+                .foregroundStyle(priority == .skip ? .tertiary : .primary)
+                .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name)
-                    .font(Theme.bodyFont(size: 13))
-                    .foregroundStyle(priority == .skip ? Theme.textTertiary : Theme.textPrimary)
+                    .font(.subheadline)
+                    .foregroundStyle(priority == .skip ? .tertiary : .primary)
                     .lineLimit(2)
                     .strikethrough(priority == .skip)
                 Text(file.formattedSize)
-                    .font(Theme.captionFont(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
 
             Spacer()
@@ -69,19 +65,18 @@ struct FilePriorityRow: View {
             } label: {
                 HStack(spacing: 4) {
                     Text(priority.label)
-                        .font(Theme.captionFont(size: 11))
+                        .font(.caption)
                     Image(systemName: priorityIcon)
-                        .font(.system(size: 10))
+                        .font(.caption2)
                 }
                 .foregroundStyle(priorityColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(priorityColor.opacity(0.15))
+                .background(priorityColor.opacity(0.12))
                 .clipShape(Capsule())
             }
         }
-        .padding(Theme.spacing8)
-        .glassMorphism(cornerRadius: Theme.radiusMedium)
+        .padding(.vertical, 4)
     }
 
     private var priorityIcon: String {
@@ -95,8 +90,8 @@ struct FilePriorityRow: View {
 
     private var priorityColor: Color {
         switch priority {
-        case .skip: return Theme.textTertiary
-        case .low: return Theme.textSecondary
+        case .skip: return .tertiary
+        case .low: return .secondary
         case .normal: return Theme.accent
         case .high: return Theme.accentSecondary
         }

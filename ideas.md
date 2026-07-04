@@ -10,9 +10,9 @@ Torrent Engine	LibTorrent (C++ library, wrapped via LibTorrent-Swift)
 Reactive	Combine (@Published, subjects, publishers)
 DI	Custom container with @Injected property wrapper
 Background	Silent audio loop + Location updates
-Sharing	GCDWebServer (HTTP + WebDAV)
+
 Widget	WidgetKit + Live Activity (Dynamic Island)
-Analytics	Firebase
+
 End-to-End Download Flow
 Magnet/URL/BitTorrent File
         │
@@ -44,8 +44,8 @@ Key Features
  3. File priority selection - choose which files to download
  4. Background downloading - two modes: silent audio + location
  5. Live Activity / Dynamic Island - real-time progress with pause button
- 6. WebDAV server - access files over WiFi from any device
- 7. In-app video player (AVKit on iOS, VLCKit on tvOS)
- 8. Storage scopes - manage storage across external drives
- 9. Auto-tracker management - auto-add trackers from lists
-10. Proxy support - SOCKS4/5, HTTP proxy for connections
+ 
+ 
+ 
+ 6. Auto-tracker management - auto-add trackers from lists
+
