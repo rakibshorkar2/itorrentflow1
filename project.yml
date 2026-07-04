@@ -54,6 +54,7 @@ targets:
       path: iTorrentFlow/Resources/iTorrentFlow.entitlements
     dependencies:
       - package: swift-async-algorithms
+        product: AsyncAlgorithms
       - target: iTorrentFlowLiveActivity
         embed: true
     preBuildScripts:
