@@ -38,6 +38,24 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
 
+      - name: Downgrade Xcode project format for compatibility
+        run: |
+          python3 -c "
+          import os
+          path = 'iTorrentFlow.xcodeproj/project.pbxproj'
+          if os.path.exists(path):
+              with open(path, 'r') as f:
+                  c = f.read()
+              c = c.replace('objectVersion = 77;', 'objectVersion = 56;')
+              c = c.replace('objectVersion = 60;', 'objectVersion = 56;')
+              c = c.replace('compatibilityVersion = \"Xcode 16.0\"', 'compatibilityVersion = \"Xcode 15.0\"')
+              with open(path, 'w') as f:
+                  f.write(c)
+              print('Project downgraded to Xcode 15 format successfully.')
+          else:
+              print('Error: project.pbxproj not found!')
+          "
+
       - name: Resolve Swift Package dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
