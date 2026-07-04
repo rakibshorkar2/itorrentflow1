@@ -5,10 +5,11 @@ import SwiftUI
 struct iTorrentFlowApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var engine = TorrentEngine.shared
+    @StateObject private var settings = SettingsManager.shared
     @State private var selectedTab: AppTab = .downloads
 
     private var preferredScheme: ColorScheme? {
-        switch SettingsManager.shared.colorScheme {
+        switch settings.colorScheme {
         case "light": return .light
         case "dark": return .dark
         default: return nil
@@ -50,6 +51,7 @@ enum AppTab: Hashable {
 struct MainTabView: View {
     @Binding var selectedTab: AppTab
     @EnvironmentObject var engine: TorrentEngine
+    @StateObject private var settings = SettingsManager.shared
     @State private var addSheetVisible = false
 
     var body: some View {

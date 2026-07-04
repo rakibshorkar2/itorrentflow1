@@ -3,22 +3,46 @@ import Charts
 
 // MARK: - App Theme
 public enum Theme {
+    // MARK: - Mode Detection
+    public static var isDark: Bool {
+        let setting = SettingsManager.shared.colorScheme
+        if setting == "dark" { return true }
+        if setting == "light" { return false }
+        return UITraitCollection.current.userInterfaceStyle == .dark
+    }
+
     // MARK: - Colors
-    public static let background = Color(red: 0.05, green: 0.05, blue: 0.12)
-    public static let surface = Color(red: 0.1, green: 0.1, blue: 0.18)
-    public static let surfaceElevated = Color(red: 0.13, green: 0.13, blue: 0.22)
-    public static let accent = Color(red: 0.0, green: 0.8, blue: 1.0)        // Cyan
+    public static var background: Color {
+        isDark ? Color(red: 0.05, green: 0.05, blue: 0.12) : Color(red: 0.94, green: 0.95, blue: 0.97)
+    }
+    public static var surface: Color {
+        isDark ? Color(red: 0.1, green: 0.1, blue: 0.18) : Color(red: 1.0, green: 1.0, blue: 1.0)
+    }
+    public static var surfaceElevated: Color {
+        isDark ? Color(red: 0.13, green: 0.13, blue: 0.22) : Color(red: 0.97, green: 0.97, blue: 0.98)
+    }
+    public static let accent = Color(red: 0.0, green: 0.7, blue: 0.95)        // Cyan
     public static let accentSecondary = Color(red: 0.4, green: 0.3, blue: 1.0) // Purple
-    public static let accentTertiary = Color(red: 0.0, green: 0.9, blue: 0.6)  // Mint
-    public static let downloadColor = Color(red: 0.0, green: 0.7, blue: 1.0)
-    public static let uploadColor = Color(red: 0.3, green: 1.0, blue: 0.5)
-    public static let warningColor = Color(red: 1.0, green: 0.8, blue: 0.0)
+    public static let accentTertiary = Color(red: 0.0, green: 0.8, blue: 0.5)  // Mint
+    public static let downloadColor = Color(red: 0.0, green: 0.6, blue: 1.0)
+    public static let uploadColor = Color(red: 0.2, green: 0.9, blue: 0.4)
+    public static let warningColor = Color(red: 1.0, green: 0.7, blue: 0.0)
     public static let errorColor = Color(red: 1.0, green: 0.3, blue: 0.3)
-    public static let textPrimary = Color.white
-    public static let textSecondary = Color.white.opacity(0.65)
-    public static let textTertiary = Color.white.opacity(0.4)
-    public static let divider = Color.white.opacity(0.08)
-    public static let glassBorder = Color.white.opacity(0.12)
+    public static var textPrimary: Color {
+        isDark ? .white : Color(red: 0.08, green: 0.08, blue: 0.12)
+    }
+    public static var textSecondary: Color {
+        isDark ? .white.opacity(0.65) : Color(red: 0.08, green: 0.08, blue: 0.12).opacity(0.65)
+    }
+    public static var textTertiary: Color {
+        isDark ? .white.opacity(0.4) : Color(red: 0.08, green: 0.08, blue: 0.12).opacity(0.4)
+    }
+    public static var divider: Color {
+        isDark ? .white.opacity(0.08) : .black.opacity(0.08)
+    }
+    public static var glassBorder: Color {
+        isDark ? .white.opacity(0.12) : .black.opacity(0.08)
+    }
 
     // MARK: - Gradients
     public static var accentGradient: LinearGradient {
@@ -30,14 +54,23 @@ public enum Theme {
     }
 
     public static var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.04, green: 0.04, blue: 0.12),
-                Color(red: 0.06, green: 0.04, blue: 0.16)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        isDark
+            ? LinearGradient(
+                colors: [
+                    Color(red: 0.04, green: 0.04, blue: 0.12),
+                    Color(red: 0.06, green: 0.04, blue: 0.16)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            : LinearGradient(
+                colors: [
+                    Color(red: 0.94, green: 0.95, blue: 0.97),
+                    Color(red: 0.92, green: 0.93, blue: 0.96)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
     }
 
     public static var downloadGradient: LinearGradient {
