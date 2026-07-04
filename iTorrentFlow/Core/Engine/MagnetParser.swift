@@ -11,12 +11,45 @@ public struct MagnetLink {
 
     // MARK: - Parse
     public static func parse(from urlString: String) throws -> MagnetLink {
-        guard urlString.lowercased().hasPrefix("magnet:?") else {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Support bare info hash or URN without magnet prefix
+        if trimmed.lowercased().hasPrefix("urn:btih:") || trimmed.count == 40 {
+            let hash: String
+            if trimmed.lowercased().hasPrefix("urn:btih:") {
+                hash = String(trimmed.dropFirst(9))
+            } else {
+                hash = trimmed
+            }
+            guard hash.range(of: "^[0-9a-fA-F]{40}$", options: .regularExpression) != nil else {
+                throw MagnetError.invalidInfoHash
+            }
+            return MagnetLink(
+                infoHash: hash.lowercased(),
+                displayName: nil,
+                trackers: [],
+                webSeeds: [],
+                exactLength: nil
+            )
+        }
+
+        // Support base32 32-char bare hashes
+        if trimmed.count == 32, trimmed.range(of: "^[A-Za-z2-7]{32}$", options: .regularExpression) != nil {
+            return MagnetLink(
+                infoHash: base32ToHex(trimmed),
+                displayName: nil,
+                trackers: [],
+                webSeeds: [],
+                exactLength: nil
+            )
+        }
+
+        guard trimmed.lowercased().hasPrefix("magnet:?") else {
             throw MagnetError.notMagnetLink
         }
 
         // URLComponents can't handle magnet: directly, so we normalize it
-        let normalized = urlString.replacingOccurrences(of: "magnet:?", with: "https://placeholder.local/?")
+        let normalized = trimmed.replacingOccurrences(of: "magnet:?", with: "https://placeholder.local/?")
         guard let comps = URLComponents(string: normalized) else {
             throw MagnetError.invalidURL
         }
@@ -112,17 +145,24 @@ public struct MagnetLink {
     }
 }
 
+    public var shortHash: String {
+        String(infoHash.prefix(16)) + "..."
+    }
+}
+
 // MARK: - Errors
 public enum MagnetError: Error, LocalizedError {
     case notMagnetLink
     case invalidURL
     case missingInfoHash
+    case invalidInfoHash
 
     public var errorDescription: String? {
         switch self {
         case .notMagnetLink: return "Not a magnet link"
         case .invalidURL: return "Invalid magnet URL"
         case .missingInfoHash: return "Magnet link missing info hash (xt parameter)"
+        case .invalidInfoHash: return "Invalid info hash in magnet link"
         }
     }
 }
