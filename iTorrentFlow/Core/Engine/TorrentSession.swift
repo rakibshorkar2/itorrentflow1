@@ -8,7 +8,7 @@ import BackgroundTasks
 @MainActor
 public final class TorrentSession: ObservableObject, Identifiable {
     public let id: UUID
-    public let metadata: TorrentMetadata
+    public var metadata: TorrentMetadata
 
     @Published public private(set) var status: TorrentStatus = .stopped
     @Published public private(set) var progress: Double = 0
@@ -84,6 +84,16 @@ public final class TorrentSession: ObservableObject, Identifiable {
     // MARK: - Core Download Loop
     private func runDownload() async {
         do {
+            // For magnet links (no pieces), fetch metadata from peers first
+            if metadata.pieces.isEmpty {
+                await fetchMetadataFromPeers()
+                // If still no pieces after fetch, we can't proceed
+                if metadata.pieces.isEmpty {
+                    await MainActor.run { self.status = .error("Failed to fetch metadata from peers") }
+                    return
+                }
+            }
+
             let pm = try PieceManager(metadata: metadata, downloadDirectory: downloadDirectory)
             self.pieceManager = pm
 
@@ -144,6 +154,54 @@ public final class TorrentSession: ObservableObject, Identifiable {
         }
     }
 
+    private func fetchMetadataFromPeers() async {
+        var allPeers: [(String, UInt16)] = []
+        await withTaskGroup(of: [(String, UInt16)].self) { group in
+            for trackerURL in metadata.trackerURLs.prefix(5) {
+                group.addTask {
+                    do {
+                        let response = try await self.trackerClient.announce(
+                            trackerURL: trackerURL,
+                            infoHash: self.metadata.infoHash,
+                            peerID: self.localPeerID,
+                            left: 0
+                        )
+                        return response.peers
+                    } catch {
+                        return []
+                    }
+                }
+            }
+            for await peers in group {
+                allPeers.append(contentsOf: peers)
+            }
+        }
+
+        let uniquePeers = Array(Set(allPeers.map { "\($0.0):\($0.1)" })
+            .compactMap { str -> (String, UInt16)? in
+                let parts = str.split(separator: ":"); guard parts.count == 2 else { return nil }
+                return (String(parts[0]), UInt16(parts[1]) ?? 6881)
+            }.prefix(10))
+
+        for (ip, port) in uniquePeers {
+            guard metadata.pieces.isEmpty else { return }
+            let conn = PeerConnection(host: ip, port: port, infoHash: metadata.infoHash, localPeerID: localPeerID)
+            do {
+                try await conn.connect()
+                let rawMetadata = try await conn.fetchMetadata()
+                let parsedMeta = try TorrentMetadata.parse(from: rawMetadata)
+                await MainActor.run {
+                    self.metadata = parsedMeta
+                }
+                conn.disconnect()
+                return
+            } catch {
+                conn.disconnect()
+                continue
+            }
+        }
+    }
+
     private func connectAndDownload(ip: String, port: UInt16) async {
         let conn = PeerConnection(
             host: ip,
@@ -166,7 +224,7 @@ public final class TorrentSession: ObservableObject, Identifiable {
                 guard let pieceIdx = idx else { break }
                 await pm.markPieceRequesting(pieceIdx)
 
-                let pLen = metadata.pieceLength
+                let pLen = pieceLength(for: pieceIdx)
                 let blockSize: UInt32 = 16384 // 16 KiB
                 var begin: UInt32 = 0
                 let totalLen = UInt32(pLen)
@@ -174,14 +232,22 @@ public final class TorrentSession: ObservableObject, Identifiable {
                 while begin < totalLen && !Task.isCancelled {
                     let reqLen = min(blockSize, totalLen - begin)
                     do {
-                        try await conn.requestPiece(
+                        let data = try await conn.requestPiece(
                             index: UInt32(pieceIdx),
                             begin: begin,
                             length: reqLen
                         )
+                        try await pm.receivePiece(
+                            index: pieceIdx,
+                            begin: Int(begin),
+                            data: data
+                        )
                         begin += reqLen
                     } catch PeerError.choked {
                         try? await Task.sleep(nanoseconds: 500_000_000)
+                    } catch {
+                        // Hash mismatch or other piece error — retry piece
+                        break
                     }
                 }
 
@@ -198,6 +264,14 @@ public final class TorrentSession: ObservableObject, Identifiable {
         } catch {
             // Peer connection failed silently — try others
         }
+    }
+
+    private func pieceLength(for index: Int) -> Int {
+        if index == metadata.pieces.count - 1 {
+            let remainder = Int(metadata.totalSize) % metadata.pieceLength
+            return remainder == 0 ? metadata.pieceLength : remainder
+        }
+        return metadata.pieceLength
     }
 
     // MARK: - Speed Timer

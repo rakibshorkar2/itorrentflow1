@@ -124,6 +124,35 @@ public struct BencodeEncoder {
         return result
     }
 
+    public static func encode(dict: [String: Any]) -> Data {
+        var result = Data()
+        result.append(UInt8(ascii: "d"))
+        for key in dict.keys.sorted() {
+            encode(.string(Data(key.utf8)), into: &result)
+            if let v = dict[key] as? Int {
+                encode(.integer(Int64(v)), into: &result)
+            } else if let v = dict[key] as? String {
+                encode(.string(Data(v.utf8)), into: &result)
+            } else if let v = dict[key] as? Data {
+                encode(.string(v), into: &result)
+            } else if let v = dict[key] as? [String: Any] {
+                result.append(encode(dict: v))
+            } else if let v = dict[key] as? [Any] {
+                result.append(UInt8(ascii: "l"))
+                for item in v {
+                    if let i = item as? Int {
+                        encode(.integer(Int64(i)), into: &result)
+                    } else if let s = item as? String {
+                        encode(.string(Data(s.utf8)), into: &result)
+                    }
+                }
+                result.append(UInt8(ascii: "e"))
+            }
+        }
+        result.append(UInt8(ascii: "e"))
+        return result
+    }
+
     private static func encode(_ value: BencodeValue, into data: inout Data) {
         switch value {
         case .string(let bytes):

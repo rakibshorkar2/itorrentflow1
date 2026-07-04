@@ -17,8 +17,20 @@ public actor PeerConnection {
     private var peerChoked = true
     private var peerInterested = false
 
+    // MARK: - Metadata Extension (BEP 9)
+    private var peerSupportsMetadata = false
+    private var utMetadataID: UInt8 = 0
+    private var metadataSize: Int = 0
+    private var metadataPieces: [Int: Data] = [:]
+    private var extHandshakeCont: CheckedContinuation<Void, Error>?
+    private var metadataContinuation: CheckedContinuation<Data, Error>?
+    private var metadataRequestedPieces = Set<Int>()
+
     public private(set) var downloadedBytes: Int64 = 0
     public private(set) var uploadedBytes: Int64 = 0
+
+    private typealias PieceKey = (index: UInt32, begin: UInt32)
+    private var pendingPiece: (key: PieceKey, continuation: CheckedContinuation<Data, Error>)?
 
     public init(host: String, port: UInt16, infoHash: Data, localPeerID: Data) {
         self.host = host
@@ -64,7 +76,8 @@ public actor PeerConnection {
         let pstr = "BitTorrent protocol"
         handshake.append(UInt8(pstr.count))
         handshake.append(contentsOf: pstr.utf8)
-        handshake.append(contentsOf: [UInt8](repeating: 0, count: 8)) // reserved
+        // Reserved bytes — set bit 20 (0x10) for extension protocol (BEP 10)
+        handshake.append(contentsOf: [0, 0, 0, 0, 0, 0x10, 0, 0])
         handshake.append(infoHash)
         handshake.append(localPeerID)
         try await send(data: handshake)
@@ -80,6 +93,11 @@ public actor PeerConnection {
         let receivedInfoHash = data[28..<48]
         guard receivedInfoHash == infoHash else {
             throw PeerError.infoHashMismatch
+        }
+        // Check if peer supports extensions (bit 20 in reserved bytes at offset 25)
+        let reserved = data[20..<28]
+        if reserved.count > 5 && (reserved[5] & 0x10) != 0 {
+            peerSupportsMetadata = true
         }
     }
 
@@ -114,12 +132,157 @@ public actor PeerConnection {
         case .bitfield(let bits): bitfield = bits
         case .have(let index):
             if index < bitfield.count { bitfield[Int(index)] = true }
+        case .piece(let index, let begin, let data):
+            if let pending = pendingPiece,
+               pending.key.index == index && pending.key.begin == begin {
+                pending.continuation.resume(returning: data)
+                pendingPiece = nil
+            }
+        case .extended(let extID, let payload):
+            await handleExtendedMessage(extID: extID, payload: payload)
         default: break
         }
     }
 
+    private func handleExtendedMessage(extID: UInt8, payload: Data) async {
+        // Extended handshake (BEP 10) — always uses extID = 0
+        if extID == 0 {
+            guard let dict = try? BencodeDecoder(data: payload).decode(),
+                  case .dictionary(let ext) = dict else {
+                extHandshakeCont?.resume(throwing: PeerError.noMetadataPeer)
+                extHandshakeCont = nil
+                return
+            }
+            // Check for ut_metadata support
+            if case .dictionary(let m) = ext["m"],
+               case .int(let id) = m["ut_metadata"] {
+                utMetadataID = UInt8(id)
+                if case .int(let size) = ext["metadata_size"] {
+                    metadataSize = Int(size)
+                }
+                extHandshakeCont?.resume()
+                extHandshakeCont = nil
+            } else {
+                extHandshakeCont?.resume(throwing: PeerError.noMetadataPeer)
+                extHandshakeCont = nil
+            }
+            return
+        }
+
+        // Check if this is a ut_metadata message
+        guard extID == utMetadataID else { return }
+        handleMetadataMessage(payload)
+    }
+
+    private func findMetadataBencodeEnd(_ data: Data) -> Int? {
+        // Scan for the end of a flat bencoded dictionary (no nested dicts/lists)
+        var i = 0
+        guard i < data.count, data[i] == UInt8(ascii: "d") else { return nil }
+        i += 1 // skip 'd'
+        var depth = 1
+        while i < data.count && depth > 0 {
+            let byte = data[i]
+            if byte == UInt8(ascii: "d") {
+                depth += 1
+                i += 1
+            } else if byte == UInt8(ascii: "e") {
+                depth -= 1
+                i += 1
+            } else if byte == UInt8(ascii: "i") {
+                // integer: i<digits>e
+                i += 1
+                while i < data.count && data[i] != UInt8(ascii: "e") { i += 1 }
+                i += 1 // skip 'e'
+            } else if byte >= UInt8(ascii: "0") && byte <= UInt8(ascii: "9") {
+                // string length prefix
+                var len = 0
+                while i < data.count && data[i] >= UInt8(ascii: "0") && data[i] <= UInt8(ascii: "9") {
+                    len = len * 10 + Int(data[i] - UInt8(ascii: "0"))
+                    i += 1
+                }
+                guard i < data.count, data[i] == UInt8(ascii: ":") else { return nil }
+                i += 1 // skip ':'
+                i += len // skip string contents
+            } else {
+                return nil
+            }
+        }
+        return depth == 0 ? i : nil
+    }
+
+    private func handleMetadataMessage(_ payload: Data) {
+        // bencoded dictionary + metadata piece data
+        guard let dictEnd = findMetadataBencodeEnd(payload) else { return }
+        let dictData = payload[..<dictEnd]
+        let pieceData = payload[dictEnd...]
+
+        guard let dict = try? BencodeDecoder(data: Data(dictData)).decode(),
+              case .dictionary(let msg) = dict,
+              case .int(let msgType) = msg["msg_type"] else { return }
+
+        switch msgType {
+        case 0: // request — we don't serve metadata, ignore
+            break
+        case 1: // data
+            guard case .int(let piece) = msg["piece"], !pieceData.isEmpty else { return }
+            metadataPieces[Int(piece)] = Data(pieceData)
+            metadataRequestedPieces.remove(Int(piece))
+
+            // Check if we have all pieces
+            if metadataPieces.count * (16 * 1024) >= metadataSize {
+                // Reassemble metadata
+                var full = Data()
+                for i in 0..<Int((metadataSize + 16*1024 - 1) / (16*1024)) {
+                    if let piece = metadataPieces[i] {
+                        full.append(piece)
+                    }
+                }
+                if full.count > metadataSize {
+                    full = full.prefix(metadataSize)
+                }
+                metadataContinuation?.resume(returning: full)
+                metadataContinuation = nil
+            } else {
+                // Request next piece
+                requestMetadataPiece()
+            }
+        case 2: // reject
+            metadataContinuation?.resume(throwing: PeerError.metadataRejected)
+            metadataContinuation = nil
+        default:
+            break
+        }
+    }
+
+    private func requestMetadataPiece() {
+        let blockSize = 16 * 1024
+        let totalPieces = (metadataSize + blockSize - 1) / blockSize
+
+        // Find the next unrequested piece
+        for i in 0..<totalPieces {
+            if metadataPieces[i] == nil && !metadataRequestedPieces.contains(i) {
+                metadataRequestedPieces.insert(i)
+                sendMetadataRequest(piece: i)
+                return
+            }
+        }
+    }
+
+    private func sendMetadataRequest(piece: Int) {
+        let dict: [String: Any] = ["msg_type": 0, "piece": piece]
+        let bencoded = BencodeEncoder.encode(dict: dict)
+        var msg = Data()
+        msg.append(bigEndian: UInt32(2 + bencoded.count))
+        msg.append(UInt8(20)) // extended message
+        msg.append(utMetadataID)
+        msg.append(bencoded)
+        // Fire and forget — send directly without awaiting
+        Task { try? await send(data: msg) }
+    }
+
     // MARK: - Request a piece
-    public func requestPiece(index: UInt32, begin: UInt32, length: UInt32) async throws {
+    @discardableResult
+    public func requestPiece(index: UInt32, begin: UInt32, length: UInt32) async throws -> Data {
         guard !amChoked else { throw PeerError.choked }
         var msg = Data()
         msg.append(bigEndian: UInt32(13))  // length
@@ -128,6 +291,10 @@ public actor PeerConnection {
         msg.append(bigEndian: begin)
         msg.append(bigEndian: length)
         try await send(data: msg)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            pendingPiece = (key: (index, begin), continuation: continuation)
+        }
     }
 
     public func sendInterested() async throws {
@@ -160,6 +327,45 @@ public actor PeerConnection {
         }
     }
 
+    // MARK: - Extension Handshake (BEP 10)
+    public func sendExtendedHandshake() {
+        let dict: [String: Any] = [
+            "m": ["ut_metadata": 2],
+            "metadata_size": 0,
+            "v": "iTorrentFlow 1.0"
+        ]
+        let payload = BencodeEncoder.encode(dict: dict)
+        var msg = Data()
+        msg.append(bigEndian: UInt32(2 + payload.count))
+        msg.append(UInt8(20)) // extended message
+        msg.append(UInt8(0))  // handshake ID
+        msg.append(payload)
+        Task { try? await send(data: msg) }
+    }
+
+    // MARK: - Fetch Metadata (BEP 9)
+    public func fetchMetadata() async throws -> Data {
+        guard peerSupportsMetadata else { throw PeerError.noMetadataPeer }
+
+        // Send the extended handshake
+        sendExtendedHandshake()
+
+        // Wait for the peer's extended handshake which includes metadata_size
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            extHandshakeCont = cont
+        }
+
+        guard metadataSize > 0 else { throw PeerError.noMetadataPeer }
+
+        // Start requesting metadata pieces
+        requestMetadataPiece()
+
+        // Wait for all metadata pieces to arrive
+        return try await withCheckedThrowingContinuation { continuation in
+            metadataContinuation = continuation
+        }
+    }
+
     public func disconnect() {
         connection?.cancel()
     }
@@ -184,6 +390,7 @@ public enum PeerMessage {
     case piece(index: UInt32, begin: UInt32, data: Data)
     case cancel(index: UInt32, begin: UInt32, length: UInt32)
     case port(UInt16)
+    case extended(extID: UInt8, payload: Data)
 
     static func decode(_ data: Data) throws -> PeerMessage {
         guard !data.isEmpty else { return .keepAlive }
@@ -211,6 +418,11 @@ public enum PeerMessage {
             let begin = data[5..<9].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
             let payload = data[9...]
             return .piece(index: idx, begin: begin, data: Data(payload))
+        case 20:
+            guard data.count >= 2 else { throw PeerError.unknownMessage(type) }
+            let extID = data[1]
+            let extPayload = data[2...]
+            return .extended(extID: extID, payload: Data(extPayload))
         default:
             throw PeerError.unknownMessage(type)
         }
@@ -221,6 +433,7 @@ public enum PeerMessage {
 public enum PeerError: Error, LocalizedError {
     case notConnected, handshakeFailed, infoHashMismatch
     case choked, noData, connectionCancelled, unknownMessage(UInt8)
+    case metadataRejected, noMetadataPeer
 
     public var errorDescription: String? {
         switch self {
@@ -231,6 +444,8 @@ public enum PeerError: Error, LocalizedError {
         case .noData: return "No data received"
         case .connectionCancelled: return "Connection cancelled"
         case .unknownMessage(let t): return "Unknown message type: \(t)"
+        case .metadataRejected: return "Peer rejected metadata request"
+        case .noMetadataPeer: return "No peer supports metadata exchange"
         }
     }
 }

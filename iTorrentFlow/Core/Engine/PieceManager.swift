@@ -25,12 +25,14 @@ public actor PieceManager {
 
     // MARK: - State
     public var progress: Double {
+        guard !metadata.pieces.isEmpty else { return 0 }
         let done = pieceStates.filter { $0.status == .verified }.count
-        return metadata.pieces.isEmpty ? 0 : Double(done) / Double(metadata.pieces.count)
+        return Double(done) / Double(metadata.pieces.count)
     }
 
     public var isComplete: Bool {
-        pieceStates.allSatisfy { $0.status == .verified }
+        guard !metadata.pieces.isEmpty else { return false }
+        return pieceStates.allSatisfy { $0.status == .verified }
     }
 
     public var pieceStatusArray: [PieceStatus] {
