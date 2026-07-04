@@ -309,7 +309,7 @@ struct FilterChip: View {
                 .padding(.vertical, Theme.spacing6)
                 .background(
                     isSelected
-                        ? Theme.accentGradient.clipShape(Capsule())
+                        ? AnyShapeStyle(Theme.accentGradient)
                         : AnyShapeStyle(Theme.surface.opacity(0.8))
                 )
                 .clipShape(Capsule())
