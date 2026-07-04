@@ -193,10 +193,10 @@ public final class TorrentSession: ObservableObject, Identifiable {
                 await MainActor.run {
                     self.metadata = parsedMeta
                 }
-                conn.disconnect()
+                await conn.disconnect()
                 return
             } catch {
-                conn.disconnect()
+                await conn.disconnect()
                 continue
             }
         }

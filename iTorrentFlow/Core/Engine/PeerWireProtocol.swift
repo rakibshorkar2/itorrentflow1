@@ -147,7 +147,8 @@ public actor PeerConnection {
     private func handleExtendedMessage(extID: UInt8, payload: Data) async {
         // Extended handshake (BEP 10) — always uses extID = 0
         if extID == 0 {
-            guard let dict = try? BencodeDecoder(data: payload).decode(),
+            var decoder = BencodeDecoder(data: payload)
+            guard let dict = try? decoder.decode(),
                   case .dictionary(let ext) = dict else {
                 extHandshakeCont?.resume(throwing: PeerError.noMetadataPeer)
                 extHandshakeCont = nil
@@ -155,9 +156,9 @@ public actor PeerConnection {
             }
             // Check for ut_metadata support
             if case .dictionary(let m) = ext["m"],
-               case .int(let id) = m["ut_metadata"] {
+               case .integer(let id) = m["ut_metadata"] {
                 utMetadataID = UInt8(id)
-                if case .int(let size) = ext["metadata_size"] {
+                if case .integer(let size) = ext["metadata_size"] {
                     metadataSize = Int(size)
                 }
                 extHandshakeCont?.resume()
@@ -216,20 +217,22 @@ public actor PeerConnection {
         let dictData = payload[..<dictEnd]
         let pieceData = payload[dictEnd...]
 
-        guard let dict = try? BencodeDecoder(data: Data(dictData)).decode(),
+        var msgDecoder = BencodeDecoder(data: Data(dictData))
+        guard let dict = try? msgDecoder.decode(),
               case .dictionary(let msg) = dict,
-              case .int(let msgType) = msg["msg_type"] else { return }
+              case .integer(let msgType) = msg["msg_type"] else { return }
 
         switch msgType {
         case 0: // request — we don't serve metadata, ignore
             break
         case 1: // data
-            guard case .int(let piece) = msg["piece"], !pieceData.isEmpty else { return }
+            guard case .integer(let piece) = msg["piece"], !pieceData.isEmpty else { return }
             metadataPieces[Int(piece)] = Data(pieceData)
             metadataRequestedPieces.remove(Int(piece))
 
             // Check if we have all pieces
-            if metadataPieces.count * (16 * 1024) >= metadataSize {
+            let totalMetadataBytes = metadataPieces.count * 16384
+            if totalMetadataBytes >= metadataSize {
                 // Reassemble metadata
                 var full = Data()
                 for i in 0..<Int((metadataSize + 16*1024 - 1) / (16*1024)) {
